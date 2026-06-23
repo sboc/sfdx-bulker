@@ -297,16 +297,17 @@ interface JobListPage {
   nextRecordsUrl?: string
 }
 
+/** Ingest job types - the get-all endpoint doesn't reliably return all of these by default. */
+const INGEST_JOB_TYPES = ['V2Ingest', 'Classic', 'BigObjectIngest']
+
 /**
- * Fetch every job of a kind. The Bulk API returns jobs in indeterminate order,
- * up to 2000 per page, with `done: false` + `nextRecordsUrl` for the rest, so we
- * must page through all of them to be sure recent jobs are included.
+ * Page through a jobs list endpoint. The Bulk API returns jobs in indeterminate
+ * order, up to 2000 per page, with `done: false` + `nextRecordsUrl` for the rest,
+ * so we follow the locator to be sure recent jobs are included.
  */
-async function listAllJobs(kind: 'ingest' | 'query', isQuery: boolean): Promise<JobInfo[]> {
+async function fetchJobPages(startPath: string, isQuery: boolean): Promise<JobInfo[]> {
   const out: JobInfo[] = []
-  // No trailing slash: the documented endpoint is /jobs/ingest (a trailing slash
-  // can be read as an empty job-id path segment).
-  let path: string | undefined = `/services/data/v${API_VERSION}/jobs/${kind}`
+  let path: string | undefined = startPath
   for (let page = 0; path && page < MAX_JOB_PAGES; page++) {
     const resp = await apiFetch(path)
     if (!resp.ok) break
@@ -317,8 +318,22 @@ async function listAllJobs(kind: 'ingest' | 'query', isQuery: boolean): Promise<
   return out
 }
 
+/** All ingest jobs, querying each job type explicitly so V2Ingest jobs are never dropped. */
+async function listIngestJobs(): Promise<JobInfo[]> {
+  const base = `/services/data/v${API_VERSION}/jobs/ingest`
+  const groups = await Promise.all(
+    INGEST_JOB_TYPES.map((t) => fetchJobPages(`${base}?jobType=${t}`, false)),
+  )
+  const byId = new Map<string, JobInfo>()
+  for (const j of groups.flat()) byId.set(j.id, j)
+  return [...byId.values()]
+}
+
 export async function listJobs(): Promise<JobInfo[]> {
-  const [ingest, query] = await Promise.all([listAllJobs('ingest', false), listAllJobs('query', true)])
+  const [ingest, query] = await Promise.all([
+    listIngestJobs(),
+    fetchJobPages(`/services/data/v${API_VERSION}/jobs/query`, true),
+  ])
   const out = [...ingest, ...query].sort((a, b) => (a.createdDate < b.createdDate ? 1 : -1))
 
   // The list endpoints omit record counts; fetch them from each job's detail endpoint.
