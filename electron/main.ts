@@ -32,6 +32,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 process.env.APP_ROOT = join(__dirname, '..')
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 const RENDERER_DIST = join(process.env.APP_ROOT, 'dist')
+// Window/taskbar icon: bundled into dist via public/ (packaged) or read from public/ (dev).
+const ICON_PATH = VITE_DEV_SERVER_URL
+  ? join(process.env.APP_ROOT, 'public', 'icon.png')
+  : join(RENDERER_DIST, 'icon.png')
 
 let win: BrowserWindow | null = null
 
@@ -42,6 +46,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: 'SFDX Bulker',
+    icon: ICON_PATH,
     backgroundColor: '#0b1221',
     webPreferences: {
       preload: join(__dirname, 'preload.mjs'),
