@@ -7,6 +7,7 @@ const ACTIVE = new Set(['Open', 'UploadComplete', 'InProgress'])
 
 interface Props {
   jobs: JobInfo[]
+  onTrack: (job: JobInfo) => void
   onDismiss: (id: string) => void
 }
 
@@ -19,11 +20,29 @@ interface Viewing {
   table?: { columns: string[]; rows: string[][]; total: number }
 }
 
-export function MonitorPanel({ jobs, onDismiss }: Props) {
+export function MonitorPanel({ jobs, onTrack, onDismiss }: Props) {
   const [statuses, setStatuses] = useState<Record<string, JobInfo>>({})
   const [auto, setAuto] = useState(true)
   const [loading, setLoading] = useState(false)
   const [viewing, setViewing] = useState<Viewing | null>(null)
+  const [idInput, setIdInput] = useState('')
+  const [lookupBusy, setLookupBusy] = useState(false)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+
+  async function queryById() {
+    const id = idInput.trim()
+    if (!id) return
+    setLookupError(null)
+    setLookupBusy(true)
+    try {
+      onTrack(await unwrap(api.jobs.status(id)))
+      setIdInput('')
+    } catch (e) {
+      setLookupError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLookupBusy(false)
+    }
+  }
 
   const refresh = useCallback(async () => {
     if (jobs.length === 0) return
@@ -75,8 +94,21 @@ export function MonitorPanel({ jobs, onDismiss }: Props) {
         <label className="toggle">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
-        <span className="preview-meta">Jobs submitted this session</span>
+        <span className="toolbar-sep" />
+        <input
+          className="filter"
+          aria-label="Look up a job by id"
+          placeholder="Job id to query…"
+          value={idInput}
+          onChange={(e) => setIdInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && queryById()}
+        />
+        <button className="btn ghost" onClick={queryById} disabled={lookupBusy || !idInput.trim()}>
+          {lookupBusy ? 'Querying…' : 'Query'}
+        </button>
       </div>
+
+      {lookupError && <div className="banner error">{lookupError}</div>}
 
       <div className="table">
         <div className="tr th">

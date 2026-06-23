@@ -72,7 +72,9 @@ function App() {
               />
             )}
             {tab === 'extract' && <ExtractPanel />}
-            {tab === 'monitor' && <MonitorPanel jobs={trackedJobs} onDismiss={dismissJob} />}
+            {tab === 'monitor' && (
+              <MonitorPanel jobs={trackedJobs} onTrack={trackJob} onDismiss={dismissJob} />
+            )}
           </main>
         </>
       ) : (

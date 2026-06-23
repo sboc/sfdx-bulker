@@ -414,6 +414,9 @@ textarea:focus {
   gap: 6px;
   margin: 0;
 }
+.toolbar-sep {
+  flex: 1;
+}
 .filter {
   padding: 6px 10px;
   font-size: 13px;
