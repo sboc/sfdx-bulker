@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LOGIN_PRESETS, normalizeDomain, loginModeForUrl, resolveLoginUrl } from './orgUrl'
+import { LOGIN_PRESETS, normalizeDomain, resolveLoginUrl } from './orgUrl'
 
 describe('normalizeDomain', () => {
   it('prepends https:// when missing', () => {
@@ -18,17 +18,6 @@ describe('normalizeDomain', () => {
 
   it('returns empty string for blank input', () => {
     expect(normalizeDomain('   ')).toBe('')
-  })
-})
-
-describe('loginModeForUrl', () => {
-  it('recognises the presets', () => {
-    expect(loginModeForUrl(LOGIN_PRESETS.production)).toBe('production')
-    expect(loginModeForUrl(LOGIN_PRESETS.sandbox)).toBe('sandbox')
-  })
-
-  it('treats anything else as custom', () => {
-    expect(loginModeForUrl('https://acme.my.salesforce.com')).toBe('custom')
   })
 })
 

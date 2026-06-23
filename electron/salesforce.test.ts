@@ -308,12 +308,6 @@ describe('job monitor', () => {
     expect(JSON.parse(init.body)).toEqual({ state: 'Aborted' })
   })
 
-  it('deleteJob DELETEs the ingest job', async () => {
-    makeActive()
-    fetchMock.mockResolvedValue(resp({}))
-    await sf.deleteJob('750a')
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
-  })
 })
 
 describe('apiFetch auth retry', () => {

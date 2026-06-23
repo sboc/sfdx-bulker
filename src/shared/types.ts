@@ -143,7 +143,6 @@ export interface BulkerApi {
   jobs: {
     status(jobId: string): Promise<IpcResult<JobInfo>>
     abort(jobId: string): Promise<IpcResult<null>>
-    delete(jobId: string): Promise<IpcResult<null>>
   }
   files: {
     openCsv(): Promise<IpcResult<{ name: string; content: string } | null>>

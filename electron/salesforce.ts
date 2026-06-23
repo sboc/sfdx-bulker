@@ -314,10 +314,4 @@ export async function abortJob(jobId: string): Promise<void> {
   }
 }
 
-export async function deleteJob(jobId: string): Promise<void> {
-  let resp = await apiFetch(`/services/data/v${API_VERSION}/jobs/ingest/${jobId}`, { method: 'DELETE' })
-  if (resp.ok) return
-  resp = await apiFetch(`/services/data/v${API_VERSION}/jobs/query/${jobId}`, { method: 'DELETE' })
-  if (!resp.ok) throw new Error(`Failed to delete job (${resp.status})`)
-}
 

@@ -15,13 +15,6 @@ export function normalizeDomain(input: string): string {
   return v
 }
 
-/** Which login mode a stored URL corresponds to. */
-export function loginModeForUrl(url: string): LoginMode {
-  if (url === LOGIN_PRESETS.production) return 'production'
-  if (url === LOGIN_PRESETS.sandbox) return 'sandbox'
-  return 'custom'
-}
-
 /** Resolve the effective login URL for a mode + custom domain input. */
 export function resolveLoginUrl(mode: LoginMode, customDomain: string): string {
   return mode === 'custom' ? normalizeDomain(customDomain) : LOGIN_PRESETS[mode]

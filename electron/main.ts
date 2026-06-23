@@ -9,7 +9,6 @@ import {
   abortJob,
   connect,
   currentIdentity,
-  deleteJob,
   describeObject,
   disconnect,
   forgetCliSession,
@@ -106,10 +105,6 @@ function registerIpc(): void {
   handle('jobs:status', (jobId) => jobStatus(jobId as string))
   handle('jobs:abort', async (jobId) => {
     await abortJob(jobId as string)
-    return null
-  })
-  handle('jobs:delete', async (jobId) => {
-    await deleteJob(jobId as string)
     return null
   })
 
