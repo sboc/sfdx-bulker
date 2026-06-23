@@ -288,22 +288,36 @@ export async function submitQuery(req: QueryJobRequest): Promise<{ jobId: string
 
 /** Max jobs to enrich with record counts per refresh (detail endpoint is one call each). */
 const ENRICH_LIMIT = 25
+/** Safety cap on pagination (each page is up to 2000 jobs). */
+const MAX_JOB_PAGES = 25
+
+interface JobListPage {
+  records: RawJobInfo[]
+  done?: boolean
+  nextRecordsUrl?: string
+}
+
+/**
+ * Fetch every job of a kind. The Bulk API returns jobs in indeterminate order,
+ * up to 2000 per page, with `done: false` + `nextRecordsUrl` for the rest, so we
+ * must page through all of them to be sure recent jobs are included.
+ */
+async function listAllJobs(kind: 'ingest' | 'query', isQuery: boolean): Promise<JobInfo[]> {
+  const out: JobInfo[] = []
+  let path: string | undefined = `/services/data/v${API_VERSION}/jobs/${kind}/`
+  for (let page = 0; path && page < MAX_JOB_PAGES; page++) {
+    const resp = await apiFetch(path)
+    if (!resp.ok) break
+    const body = (await resp.json()) as JobListPage
+    out.push(...body.records.map((j) => toJobInfo(j, isQuery)))
+    path = body.done === false ? body.nextRecordsUrl : undefined
+  }
+  return out
+}
 
 export async function listJobs(): Promise<JobInfo[]> {
-  const [ingestResp, queryResp] = await Promise.all([
-    apiFetch(`/services/data/v${API_VERSION}/jobs/ingest/`),
-    apiFetch(`/services/data/v${API_VERSION}/jobs/query/`),
-  ])
-  const out: JobInfo[] = []
-  if (ingestResp.ok) {
-    const body = (await ingestResp.json()) as { records: RawJobInfo[] }
-    out.push(...body.records.map((j) => toJobInfo(j)))
-  }
-  if (queryResp.ok) {
-    const body = (await queryResp.json()) as { records: RawJobInfo[] }
-    out.push(...body.records.map((j) => toJobInfo(j, true)))
-  }
-  out.sort((a, b) => (a.createdDate < b.createdDate ? 1 : -1))
+  const [ingest, query] = await Promise.all([listAllJobs('ingest', false), listAllJobs('query', true)])
+  const out = [...ingest, ...query].sort((a, b) => (a.createdDate < b.createdDate ? 1 : -1))
 
   // The list endpoints omit record counts; fetch them from each job's detail endpoint.
   const enriched = await Promise.all(

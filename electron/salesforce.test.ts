@@ -296,6 +296,31 @@ describe('job monitor', () => {
     expect(jobs[1]).toMatchObject({ numberRecordsProcessed: 50, isQuery: true })
   })
 
+  it('paginates through all job pages via nextRecordsUrl', async () => {
+    makeActive()
+    fetchMock.mockImplementation(async (url: URL) => {
+      const u = String(url)
+      if (u.endsWith('/jobs/ingest/'))
+        return resp({
+          records: [{ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01' }],
+          done: false,
+          nextRecordsUrl: '/services/data/v62.0/jobs/ingest/?locator=L2',
+        })
+      if (u.includes('jobs/ingest/?locator=L2'))
+        return resp({
+          records: [{ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23' }],
+          done: true,
+        })
+      if (u.endsWith('/jobs/query/')) return resp({ records: [], done: true })
+      if (u.includes('/jobs/ingest/750new')) return resp({ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23', numberRecordsProcessed: 5 })
+      if (u.includes('/jobs/ingest/old1')) return resp({ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01', numberRecordsProcessed: 1 })
+      return resp({}, { ok: false, status: 404 })
+    })
+    const jobs = await sf.listJobs()
+    // The recent job lives on page 2; it must be fetched and sorted to the top.
+    expect(jobs.map((j) => j.id)).toEqual(['750new', 'old1'])
+  })
+
   it('jobStatus falls back from ingest to query', async () => {
     makeActive()
     fetchMock.mockImplementation(async (url: URL) => {
