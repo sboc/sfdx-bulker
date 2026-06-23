@@ -5,6 +5,7 @@
   "type": "module",
   "main": "dist-electron/main.js",
   "description": "Desktop app for Salesforce Bulk API 2.0 jobs (insert/update/upsert/delete/hardDelete/query + monitor)",
+  "author": "Merkle <simon.nielsen@merkle.com>",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -53,7 +54,15 @@
       "dist-electron/**/*"
     ],
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility"
     }
   }
 }
