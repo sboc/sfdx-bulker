@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, unwrap } from '../api'
-import { parseCsvPreview } from '../shared/csv'
-import type { BulkOperation, JobInfo, LineEnding, SObjectInfo } from '../shared/types'
+import { parseCsvPreview, remapCsv } from '../shared/csv'
+import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
   { id: 'insert', label: 'Insert', desc: 'Create new records' },
@@ -11,6 +11,21 @@ const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
   { id: 'hardDelete', label: 'Hard Delete', desc: 'Permanently delete - bypasses recycle bin' },
 ]
 
+const IDS_NEEDED = new Set<BulkOperation>(['update', 'delete', 'hardDelete'])
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+/** Auto-match CSV columns to field API names / labels. */
+function autoMap(columns: string[], fields: SObjectField[]): Record<string, string> {
+  const byKey = new Map<string, string>()
+  for (const f of fields) {
+    byKey.set(norm(f.name), f.name)
+    if (!byKey.has(norm(f.label))) byKey.set(norm(f.label), f.name)
+  }
+  const m: Record<string, string> = {}
+  for (const c of columns) m[c] = byKey.get(norm(c)) ?? ''
+  return m
+}
+
 export function LoadPanel() {
   const [object, setObject] = useState('')
   const [objects, setObjects] = useState<SObjectInfo[]>([])
@@ -19,11 +34,16 @@ export function LoadPanel() {
   const [externalId, setExternalId] = useState('')
   const [lineEnding] = useState<LineEnding>('LF')
   const [file, setFile] = useState<{ name: string; content: string } | null>(null)
+  const [fields, setFields] = useState<SObjectField[]>([])
+  const [fieldsObject, setFieldsObject] = useState('')
+  const [fieldsError, setFieldsError] = useState<string | null>(null)
+  const [mapping, setMapping] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [job, setJob] = useState<JobInfo | null>(null)
 
   const preview = useMemo(() => parseCsvPreview(file?.content), [file])
+  const mapReady = fields.length > 0 && fieldsObject === object && !!preview
 
   useEffect(() => {
     api.metadata.listObjects().then((r) => {
@@ -31,6 +51,40 @@ export function LoadPanel() {
       else setObjectsError(r.error ?? 'Failed to load objects')
     })
   }, [])
+
+  // Describe the chosen object + auto-map its fields to the CSV columns.
+  useEffect(() => {
+    if (!preview || !objects.some((o) => o.name === object)) return
+    let cancelled = false
+    const t = setTimeout(() => {
+      setFieldsError(null)
+      api.metadata.describeObject(object).then((r) => {
+        if (cancelled) return
+        if (r.ok) {
+          const f = r.data ?? []
+          setFields(f)
+          setFieldsObject(object)
+          setMapping(autoMap(preview.columns, f))
+        } else {
+          setFieldsError(r.error ?? 'Failed to load fields')
+        }
+      })
+    }, 0)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [object, preview, objects])
+
+  const selectableFields = useMemo(
+    () => fields.filter((f) => f.createable || f.updateable || f.name === 'Id'),
+    [fields],
+  )
+  const externalIdFields = useMemo(
+    () => fields.filter((f) => f.externalId || f.name === 'Id'),
+    [fields],
+  )
+  const mappedCount = preview ? preview.columns.filter((c) => mapping[c]).length : 0
 
   async function pickFile() {
     const f = await unwrap(api.files.openCsv())
@@ -45,9 +99,21 @@ export function LoadPanel() {
     setError(null)
     setJob(null)
     if (!object.trim()) return setError('Choose a target sObject first.')
-    if (!file) return setError('Choose a CSV file first.')
+    if (!file || !preview) return setError('Choose a CSV file first.')
     if (operation === 'upsert' && !externalId.trim())
-      return setError('Upsert requires an external Id field name.')
+      return setError('Upsert requires an external Id field.')
+
+    let csv = file.content
+    if (mapReady) {
+      const targets = preview.columns.map((c) => mapping[c] || '')
+      if (!targets.some(Boolean)) return setError('Map at least one column to a field.')
+      if (operation === 'upsert' && !targets.includes(externalId))
+        return setError(`Map a column to the external Id field "${externalId}".`)
+      if (IDS_NEEDED.has(operation) && !targets.includes('Id'))
+        return setError(`Map a column to Id for ${operation}.`)
+      csv = remapCsv(file.content, targets)
+    }
+
     setBusy(true)
     try {
       const info = await unwrap(
@@ -55,7 +121,7 @@ export function LoadPanel() {
           object: object.trim(),
           operation,
           externalIdFieldName: externalId.trim() || undefined,
-          csv: file.content,
+          csv,
           lineEnding,
         }),
       )
@@ -118,11 +184,22 @@ export function LoadPanel() {
           {operation === 'upsert' && (
             <label>
               External Id field
-              <input
-                value={externalId}
-                onChange={(e) => setExternalId(e.target.value)}
-                placeholder="External_Id__c"
-              />
+              {externalIdFields.length > 0 ? (
+                <select value={externalId} onChange={(e) => setExternalId(e.target.value)}>
+                  <option value="">Select a field…</option>
+                  {externalIdFields.map((f) => (
+                    <option key={f.name} value={f.name}>
+                      {f.label} ({f.name})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={externalId}
+                  onChange={(e) => setExternalId(e.target.value)}
+                  placeholder="External_Id__c"
+                />
+              )}
             </label>
           )}
 
@@ -135,18 +212,54 @@ export function LoadPanel() {
               <div className="preview-meta">
                 <strong>{preview.rows}</strong> rows · <strong>{preview.columns.length}</strong> columns
               </div>
-              <div className="chips">
-                {preview.columns.slice(0, 12).map((c) => (
-                  <span key={c} className="chip">
-                    {c}
-                  </span>
-                ))}
-                {preview.columns.length > 12 && <span className="chip more">+{preview.columns.length - 12}</span>}
-              </div>
             </div>
           )}
         </div>
       </div>
+
+      {preview && (
+        <div className="card">
+          <h3>4. Field mapping</h3>
+          {!objects.some((o) => o.name === object) ? (
+            <p className="hint">Choose a target sObject above to map columns to its fields.</p>
+          ) : fieldsError ? (
+            <p className="hint">
+              Could not load fields ({fieldsError}). The CSV will be sent as-is - its headers must
+              be field API names.
+            </p>
+          ) : !mapReady ? (
+            <p className="hint">Loading {object} fields…</p>
+          ) : (
+            <>
+              <div className="preview-meta">
+                {mappedCount} of {preview.columns.length} columns mapped
+              </div>
+              <div className="map-list">
+                {preview.columns.map((col) => (
+                  <div key={col} className="map-row">
+                    <span className="map-src" title={col}>
+                      {col}
+                    </span>
+                    <span className="map-arrow">→</span>
+                    <select
+                      className={mapping[col] ? 'map-target' : 'map-target unmapped'}
+                      value={mapping[col] ?? ''}
+                      onChange={(e) => setMapping({ ...mapping, [col]: e.target.value })}
+                    >
+                      <option value="">— ignore —</option>
+                      {selectableFields.map((f) => (
+                        <option key={f.name} value={f.name}>
+                          {f.label} ({f.name})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {error && <div className="banner error">{error}</div>}
       {job && (
@@ -167,4 +280,3 @@ export function LoadPanel() {
     </div>
   )
 }
-

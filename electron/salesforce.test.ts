@@ -5,6 +5,7 @@ import type { StoredTokens } from './store'
 const h = vi.hoisted(() => ({
   conn: {
     describeGlobal: vi.fn(),
+    describe: vi.fn(),
     bulk2: { createJob: vi.fn(), query: vi.fn() },
   },
 }))
@@ -199,6 +200,21 @@ describe('listObjects', () => {
       { name: 'Account', label: 'Account' },
       { name: 'Contact', label: 'Contact' },
     ])
+  })
+})
+
+describe('describeObject', () => {
+  it('maps + sorts fields by API name', async () => {
+    makeActive()
+    h.conn.describe.mockResolvedValue({
+      fields: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Ext__c', label: 'Ext', type: 'string', createable: true, updateable: true, externalId: true },
+      ],
+    })
+    const fields = await sf.describeObject('Account')
+    expect(fields.map((f) => f.name)).toEqual(['Ext__c', 'Name'])
+    expect(fields[0]).toMatchObject({ name: 'Ext__c', externalId: true })
   })
 })
 

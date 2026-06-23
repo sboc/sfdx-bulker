@@ -5,7 +5,7 @@ import type { IpcResult } from '../shared/types'
 
 vi.mock('../api', () => ({
   api: {
-    metadata: { listObjects: vi.fn() },
+    metadata: { listObjects: vi.fn(), describeObject: vi.fn() },
     files: { openCsv: vi.fn(), saveCsv: vi.fn() },
     ingest: { submit: vi.fn(), results: vi.fn() },
   },
@@ -27,6 +27,7 @@ const OBJECTS = [
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.metadata.listObjects).mockResolvedValue({ ok: true, data: OBJECTS })
+  vi.mocked(api.metadata.describeObject).mockResolvedValue({ ok: true, data: [] })
   vi.mocked(api.files.openCsv).mockResolvedValue({ ok: true, data: { name: 'data.csv', content: 'Id\n1\n2' } })
   vi.mocked(api.ingest.submit).mockResolvedValue({
     ok: true,
@@ -35,10 +36,9 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-async function chooseFile() {
+async function chooseFile(name = /data\.csv/) {
   fireEvent.click(screen.getByRole('button', { name: /Choose CSV file/ }))
-  // file button label flips to the chosen name once openCsv resolves
-  await screen.findByRole('button', { name: /data\.csv/ })
+  await screen.findByRole('button', { name })
 }
 
 describe('LoadPanel render', () => {
@@ -55,17 +55,16 @@ describe('LoadPanel render', () => {
     await screen.findByPlaceholderText('Search 2 objects…')
     expect((screen.getByRole('button', { name: /Run insert/ }) as HTMLButtonElement).disabled).toBe(true)
   })
-})
 
-describe('LoadPanel file + submit', () => {
-  it('shows a CSV preview after a file is chosen', async () => {
+  it('shows row/column counts after a file is chosen', async () => {
     render(<LoadPanel />)
     await screen.findByPlaceholderText('Search 2 objects…')
     await chooseFile()
     expect(screen.getByText('2')).toBeTruthy() // 2 rows
-    expect(screen.getByText('Id')).toBeTruthy() // column chip
   })
+})
 
+describe('LoadPanel submit', () => {
   it('submits an insert job and shows the new job id', async () => {
     render(<LoadPanel />)
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
@@ -101,5 +100,36 @@ describe('LoadPanel file + submit', () => {
     await chooseFile()
     fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
     expect(await screen.findByText('bulk boom')).toBeTruthy()
+  })
+})
+
+describe('LoadPanel field mapping', () => {
+  it('auto-maps CSV columns to fields and remaps the CSV on submit', async () => {
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Email__c', label: 'Email', type: 'email', createable: true, updateable: true, externalId: false },
+      ],
+    })
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: { name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' },
+    })
+
+    render(<LoadPanel />)
+    const obj = await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.change(obj, { target: { value: 'Account' } })
+    await chooseFile(/c\.csv/)
+
+    // Auto-match: Name -> Name, Email -> Email__c (matched by label)
+    expect(await screen.findByText('2 of 2 columns mapped')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
+    await waitFor(() =>
+      expect(api.ingest.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ csv: 'Name,Email__c\nAcme,a@x.com' }),
+      ),
+    )
   })
 })

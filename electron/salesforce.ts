@@ -21,6 +21,7 @@ import type {
   QueryJobRequest,
   ResultKind,
   SavedOrgView,
+  SObjectField,
   SObjectInfo,
 } from '../src/shared/types'
 
@@ -218,6 +219,23 @@ export async function listObjects(): Promise<SObjectInfo[]> {
     const res = await conn.describeGlobal()
     return res.sobjects
       .map((s) => ({ name: s.name, label: s.label }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+}
+
+/** Fields of an sObject, for CSV column mapping. */
+export async function describeObject(object: string): Promise<SObjectField[]> {
+  return withConnection(async (conn) => {
+    const res = await conn.describe(object)
+    return res.fields
+      .map((f) => ({
+        name: f.name,
+        label: f.label,
+        type: String(f.type),
+        createable: f.createable,
+        updateable: f.updateable,
+        externalId: f.externalId ?? false,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
   })
 }

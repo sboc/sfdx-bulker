@@ -10,6 +10,7 @@ import {
   connect,
   currentIdentity,
   deleteJob,
+  describeObject,
   disconnect,
   forgetCliSession,
   ingestResults,
@@ -93,6 +94,7 @@ function registerIpc(): void {
 
   // metadata
   handle('metadata:listObjects', () => listObjects())
+  handle('metadata:describeObject', (object) => describeObject(object as string))
 
   // ingest
   handle('ingest:submit', (req) => submitIngest(req as IngestJobRequest))

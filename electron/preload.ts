@@ -15,6 +15,7 @@ const api: BulkerApi = {
   },
   metadata: {
     listObjects: () => invoke('metadata:listObjects'),
+    describeObject: (object) => invoke('metadata:describeObject', object),
   },
   ingest: {
     submit: (req) => invoke('ingest:submit', req),

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recordsToCsv, parseCsvPreview, splitCsvLine } from './csv'
+import { recordsToCsv, parseCsvPreview, splitCsvLine, remapCsv } from './csv'
 
 describe('splitCsvLine', () => {
   it('splits simple fields', () => {
@@ -63,5 +63,30 @@ describe('recordsToCsv', () => {
 
   it('renders null/undefined as empty and serialises nested objects', () => {
     expect(recordsToCsv([{ a: null, b: undefined, c: { x: 1 } }])).toBe('a,b,c\n,,"{""x"":1}"')
+  })
+})
+
+describe('remapCsv', () => {
+  it('renames headers and drops ignored columns', () => {
+    const csv = 'Name,Email,Junk\nAcme,a@x.com,zzz\nGlobex,g@x.com,yyy'
+    // source cols: Name->Name, Email->Email__c, Junk-> (dropped)
+    expect(remapCsv(csv, ['Name', 'Email__c', ''])).toBe(
+      'Name,Email__c\nAcme,a@x.com\nGlobex,g@x.com',
+    )
+  })
+
+  it('reorders output to follow kept source columns and re-escapes', () => {
+    const csv = '"Last, First",Age\n"Doe, Jane",30'
+    expect(remapCsv(csv, ['Name', 'Age__c'])).toBe('Name,Age__c\n"Doe, Jane",30')
+  })
+
+  it('pads missing trailing cells with empty values', () => {
+    const csv = 'A,B\n1'
+    expect(remapCsv(csv, ['X', 'Y'])).toBe('X,Y\n1,')
+  })
+
+  it('returns empty string when nothing is mapped', () => {
+    expect(remapCsv('A,B\n1,2', ['', ''])).toBe('')
+    expect(remapCsv('', ['X'])).toBe('')
   })
 })

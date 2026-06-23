@@ -62,6 +62,16 @@ export interface SObjectInfo {
   label: string
 }
 
+export interface SObjectField {
+  name: string
+  label: string
+  type: string
+  createable: boolean
+  updateable: boolean
+  /** True for external-id-capable fields (usable as the upsert key). */
+  externalId: boolean
+}
+
 export interface OrgIdentity {
   instanceUrl: string
   username: string
@@ -121,6 +131,7 @@ export interface BulkerApi {
   }
   metadata: {
     listObjects(): Promise<IpcResult<SObjectInfo[]>>
+    describeObject(object: string): Promise<IpcResult<SObjectField[]>>
   }
   ingest: {
     submit(req: IngestJobRequest): Promise<IpcResult<JobInfo>>

@@ -60,8 +60,13 @@ component tests for `ConnectBar` and `LoadPanel`.
 
 ## Operations notes
 
-- **update / delete / hardDelete** require an `Id` column in the CSV.
-- **upsert** requires an external Id field name (entered in the UI).
+- **Field mapping**: after picking the object + CSV, the Load tab fetches the
+  object's fields and auto-maps each CSV column (by API name or label). Adjust
+  any mapping or set a column to *ignore*; the CSV is rewritten to field API
+  names before upload. If fields can't be loaded, the CSV is sent as-is.
+- **update / delete / hardDelete** require a column mapped to `Id`.
+- **upsert** requires an external Id field (chosen from the object's external-id
+  fields) with a column mapped to it.
 - **hardDelete** permanently deletes records (bypasses the recycle bin) and
   needs the *Bulk API Hard Delete* user permission.
 - Jobs are submitted asynchronously - the **Monitor** tab polls for completion

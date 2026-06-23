@@ -31,6 +31,13 @@ export function parseCsvPreview(content?: string): { rows: number; columns: stri
   return { rows: Math.max(0, lines.length - 1), columns: splitCsvLine(lines[0]) }
 }
 
+/** Escape one value for CSV output. */
+export function escapeCsvValue(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 /** Serialise records to CSV. Keys are the union of all record keys, minus `attributes`. */
 export function recordsToCsv(records: Record<string, unknown>[]): string {
   if (records.length === 0) return ''
@@ -40,12 +47,25 @@ export function recordsToCsv(records: Record<string, unknown>[]): string {
       return set
     }, new Set<string>()),
   )
-  const esc = (v: unknown): string => {
-    if (v === null || v === undefined) return ''
-    const s = typeof v === 'object' ? JSON.stringify(v) : String(v)
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
-  }
   const lines = [keys.join(',')]
-  for (const r of records) lines.push(keys.map((k) => esc(r[k])).join(','))
+  for (const r of records) lines.push(keys.map((k) => escapeCsvValue(r[k])).join(','))
   return lines.join('\n')
+}
+
+/**
+ * Rewrite a CSV's columns according to `targets`, aligned to the source columns
+ * (index i maps source column i to field name targets[i]; '' drops the column).
+ * Output column order follows the kept source columns.
+ */
+export function remapCsv(content: string, targets: string[]): string {
+  const lines = content.split(/\r\n|\n/).filter((l) => l.length > 0)
+  if (lines.length === 0) return ''
+  const keep = targets.map((t, i) => ({ t: t.trim(), i })).filter((k) => k.t)
+  if (keep.length === 0) return ''
+  const out = [keep.map((k) => k.t).join(',')]
+  for (let r = 1; r < lines.length; r++) {
+    const cells = splitCsvLine(lines[r])
+    out.push(keep.map((k) => escapeCsvValue(cells[k.i] ?? '')).join(','))
+  }
+  return out.join('\n')
 }
