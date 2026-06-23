@@ -18,6 +18,7 @@ const TABS: { id: Tab; label: string }[] = [
 function App() {
   const [org, setOrg] = useState<OrgIdentity | null>(null)
   const [tab, setTab] = useState<Tab>('load')
+  const [monitorJobId, setMonitorJobId] = useState('')
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -49,16 +50,26 @@ function App() {
               <button
                 key={t.id}
                 className={tab === t.id ? 'tab active' : 'tab'}
-                onClick={() => setTab(t.id)}
+                onClick={() => {
+                  setMonitorJobId('') // manual nav shows all jobs
+                  setTab(t.id)
+                }}
               >
                 {t.label}
               </button>
             ))}
           </nav>
           <main className="content">
-            {tab === 'load' && <LoadPanel />}
+            {tab === 'load' && (
+              <LoadPanel
+                onTrackJob={(id) => {
+                  setMonitorJobId(id)
+                  setTab('monitor')
+                }}
+              />
+            )}
             {tab === 'extract' && <ExtractPanel />}
-            {tab === 'monitor' && <MonitorPanel />}
+            {tab === 'monitor' && <MonitorPanel initialJobId={monitorJobId} />}
           </main>
         </>
       ) : (

@@ -362,6 +362,10 @@ textarea:focus {
   color: var(--muted);
   border-style: dashed;
 }
+.map-target.dupe {
+  border-color: var(--danger);
+  color: #ff9ea1;
+}
 
 /* Banners */
 .banner {
@@ -379,6 +383,10 @@ textarea:focus {
   background: rgba(46, 204, 113, 0.12);
   border: 1px solid var(--success);
   color: #8ef0b6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 /* Actions row */

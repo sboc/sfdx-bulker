@@ -8,11 +8,12 @@ const ACTIVE = new Set(['Open', 'UploadComplete', 'InProgress'])
 const displayOp = (j: JobInfo) => (j.isQuery ? 'query' : j.operation)
 const sortedUnique = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort()
 
-export function MonitorPanel() {
+export function MonitorPanel({ initialJobId = '' }: { initialJobId?: string }) {
   const [jobs, setJobs] = useState<JobInfo[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [auto, setAuto] = useState(true)
+  const [idFilter, setIdFilter] = useState(initialJobId)
   const [objectFilter, setObjectFilter] = useState('')
   const [opFilter, setOpFilter] = useState('')
 
@@ -22,11 +23,13 @@ export function MonitorPanel() {
     () =>
       jobs.filter(
         (j) =>
+          (!idFilter || j.id.toLowerCase().includes(idFilter.trim().toLowerCase())) &&
           (!objectFilter || j.object === objectFilter) &&
           (!opFilter || displayOp(j) === opFilter),
       ),
-    [jobs, objectFilter, opFilter],
+    [jobs, idFilter, objectFilter, opFilter],
   )
+  const hasFilter = !!idFilter || !!objectFilter || !!opFilter
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -59,6 +62,13 @@ export function MonitorPanel() {
         <label className="toggle">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
+        <input
+          className="filter"
+          aria-label="Filter by job id"
+          placeholder="Job id…"
+          value={idFilter}
+          onChange={(e) => setIdFilter(e.target.value)}
+        />
         <select
           className="filter"
           aria-label="Filter by object"
@@ -85,10 +95,11 @@ export function MonitorPanel() {
             </option>
           ))}
         </select>
-        {(objectFilter || opFilter) && (
+        {hasFilter && (
           <button
             className="link"
             onClick={() => {
+              setIdFilter('')
               setObjectFilter('')
               setOpFilter('')
             }}

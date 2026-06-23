@@ -26,7 +26,7 @@ function autoMap(columns: string[], fields: SObjectField[]): Record<string, stri
   return m
 }
 
-export function LoadPanel() {
+export function LoadPanel({ onTrackJob }: { onTrackJob?: (jobId: string) => void }) {
   const [object, setObject] = useState('')
   const [objects, setObjects] = useState<SObjectInfo[]>([])
   const [objectsError, setObjectsError] = useState<string | null>(null)
@@ -85,6 +85,15 @@ export function LoadPanel() {
     [fields],
   )
   const mappedCount = preview ? preview.columns.filter((c) => mapping[c]).length : 0
+  // Target fields mapped by more than one column (not allowed).
+  const duplicateTargets = useMemo(() => {
+    const counts = new Map<string, number>()
+    if (preview) for (const c of preview.columns) {
+      const t = mapping[c]
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
+    }
+    return new Set([...counts].filter(([, n]) => n > 1).map(([t]) => t))
+  }, [preview, mapping])
 
   async function pickFile() {
     const f = await unwrap(api.files.openCsv())
@@ -107,6 +116,8 @@ export function LoadPanel() {
     if (mapReady) {
       const targets = preview.columns.map((c) => mapping[c] || '')
       if (!targets.some(Boolean)) return setError('Map at least one column to a field.')
+      if (duplicateTargets.size > 0)
+        return setError(`Each field can be mapped once. Duplicated: ${[...duplicateTargets].join(', ')}.`)
       if (operation === 'upsert' && !targets.includes(externalId))
         return setError(`Map a column to the external Id field "${externalId}".`)
       if (IDS_NEEDED.has(operation) && !targets.includes('Id'))
@@ -234,6 +245,12 @@ export function LoadPanel() {
               <div className="preview-meta">
                 {mappedCount} of {preview.columns.length} columns mapped
               </div>
+              {duplicateTargets.size > 0 && (
+                <div className="banner error">
+                  Each field can be mapped to only one column. Duplicated:{' '}
+                  {[...duplicateTargets].join(', ')}.
+                </div>
+              )}
               <div className="map-list">
                 {preview.columns.map((col) => (
                   <div key={col} className="map-row">
@@ -242,7 +259,13 @@ export function LoadPanel() {
                     </span>
                     <span className="map-arrow">→</span>
                     <select
-                      className={mapping[col] ? 'map-target' : 'map-target unmapped'}
+                      className={
+                        mapping[col]
+                          ? duplicateTargets.has(mapping[col])
+                            ? 'map-target dupe'
+                            : 'map-target'
+                          : 'map-target unmapped'
+                      }
                       value={mapping[col] ?? ''}
                       onChange={(e) => setMapping({ ...mapping, [col]: e.target.value })}
                     >
@@ -264,7 +287,14 @@ export function LoadPanel() {
       {error && <div className="banner error">{error}</div>}
       {job && (
         <div className="banner success">
-          Job <code>{job.id}</code> submitted - state <strong>{job.state}</strong>. Track it in the Monitor tab.
+          <span>
+            Job <code>{job.id}</code> submitted - state <strong>{job.state}</strong>.
+          </span>
+          {onTrackJob && (
+            <button className="link" onClick={() => onTrackJob(job.id)}>
+              View in Monitor →
+            </button>
+          )}
         </div>
       )}
 
@@ -272,7 +302,7 @@ export function LoadPanel() {
         <button
           className={destructive ? 'btn danger' : 'btn primary'}
           onClick={submit}
-          disabled={busy || !file || !object.trim()}
+          disabled={busy || !file || !object.trim() || duplicateTargets.size > 0}
         >
           {busy ? 'Submitting…' : `Run ${operation}`}
         </button>

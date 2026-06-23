@@ -132,4 +132,32 @@ describe('LoadPanel field mapping', () => {
       ),
     )
   })
+
+  it('blocks submit when two columns map to the same field', async () => {
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Email__c', label: 'Email', type: 'email', createable: true, updateable: true, externalId: false },
+      ],
+    })
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: { name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' },
+    })
+
+    const { container } = render(<LoadPanel />)
+    const obj = await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.change(obj, { target: { value: 'Account' } })
+    await chooseFile(/c\.csv/)
+    await screen.findByText('2 of 2 columns mapped')
+
+    // Point the second column (Email) at Name too -> duplicate
+    const targets = container.querySelectorAll<HTMLSelectElement>('select.map-target')
+    fireEvent.change(targets[1], { target: { value: 'Name' } })
+
+    expect(await screen.findByText(/Duplicated: Name/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: /Run insert/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect(api.ingest.submit).not.toHaveBeenCalled()
+  })
 })

@@ -70,6 +70,21 @@ describe('MonitorPanel', () => {
     expect(screen.queryByText('750q')).toBeNull()
   })
 
+  it('filters by job id, and seeds the filter from initialJobId', async () => {
+    const view = render(<MonitorPanel />)
+    await screen.findByText('750a')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter by job id' }), {
+      target: { value: '750q' },
+    })
+    expect(screen.queryByText('750a')).toBeNull()
+    expect(screen.getByText('750q')).toBeTruthy()
+    view.unmount()
+
+    render(<MonitorPanel initialJobId="750a" />)
+    await screen.findByText('750a')
+    expect(screen.queryByText('750q')).toBeNull()
+  })
+
   it('downloads success results through the file dialog', async () => {
     render(<MonitorPanel />)
     await screen.findByText('750a')
