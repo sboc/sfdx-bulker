@@ -304,7 +304,9 @@ interface JobListPage {
  */
 async function listAllJobs(kind: 'ingest' | 'query', isQuery: boolean): Promise<JobInfo[]> {
   const out: JobInfo[] = []
-  let path: string | undefined = `/services/data/v${API_VERSION}/jobs/${kind}/`
+  // No trailing slash: the documented endpoint is /jobs/ingest (a trailing slash
+  // can be read as an empty job-id path segment).
+  let path: string | undefined = `/services/data/v${API_VERSION}/jobs/${kind}`
   for (let page = 0; path && page < MAX_JOB_PAGES; page++) {
     const resp = await apiFetch(path)
     if (!resp.ok) break

@@ -279,8 +279,8 @@ describe('job monitor', () => {
   function routeJobs() {
     fetchMock.mockImplementation(async (url: URL) => {
       const u = String(url)
-      if (u.endsWith('/jobs/ingest/')) return resp({ records: [{ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23' }] })
-      if (u.endsWith('/jobs/query/')) return resp({ records: [{ id: '750q', object: 'Contact', operation: 'query', state: 'JobComplete', createdDate: '2026-06-22' }] })
+      if (u.endsWith('/jobs/ingest')) return resp({ records: [{ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23' }] })
+      if (u.endsWith('/jobs/query')) return resp({ records: [{ id: '750q', object: 'Contact', operation: 'query', state: 'JobComplete', createdDate: '2026-06-22' }] })
       if (u.includes('/jobs/ingest/750a')) return resp({ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23', numberRecordsProcessed: 100, numberRecordsFailed: 2 })
       if (u.includes('/jobs/query/750q')) return resp({ id: '750q', object: 'Contact', operation: 'query', state: 'JobComplete', createdDate: '2026-06-22', numberRecordsProcessed: 50 })
       return resp({}, { ok: false, status: 404 })
@@ -300,7 +300,7 @@ describe('job monitor', () => {
     makeActive()
     fetchMock.mockImplementation(async (url: URL) => {
       const u = String(url)
-      if (u.endsWith('/jobs/ingest/'))
+      if (u.endsWith('/jobs/ingest'))
         return resp({
           records: [{ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01' }],
           done: false,
@@ -311,7 +311,7 @@ describe('job monitor', () => {
           records: [{ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23' }],
           done: true,
         })
-      if (u.endsWith('/jobs/query/')) return resp({ records: [], done: true })
+      if (u.endsWith('/jobs/query')) return resp({ records: [], done: true })
       if (u.includes('/jobs/ingest/750new')) return resp({ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23', numberRecordsProcessed: 5 })
       if (u.includes('/jobs/ingest/old1')) return resp({ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01', numberRecordsProcessed: 1 })
       return resp({}, { ok: false, status: 404 })
