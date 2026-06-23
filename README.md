@@ -44,7 +44,16 @@ handles token refresh; the app caches each org's session encrypted on disk.
 
 ```bash
 npm run build      # type-check + bundle renderer, main, preload
-npm run dist        # package a distributable via electron-builder
+npm run dist        # package a distributable via electron-builder -> release/
+```
+
+`npm run dist` produces `release/SFDX Bulker-<version>.AppImage`. AppImages don't
+self-install, so file managers show a generic AppImage icon until integrated. To
+add a launcher menu entry with the proper icon:
+
+```bash
+scripts/install-desktop.sh              # add menu entry + icon
+scripts/install-desktop.sh --uninstall  # remove it
 ```
 
 ## Test
