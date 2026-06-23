@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { deleteOrg } from './store'
 import { loginCliOrg, logoutCliOrg } from './sfcli'
+import { fixPathEnv } from './path-env'
 import {
   abortJob,
   connect,
@@ -134,6 +135,9 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  // Packaged GUI launches get a minimal PATH; recover the login-shell PATH so
+  // the bundled app can find the `sf` CLI (lives in nvm/volta/etc bins).
+  if (app.isPackaged) fixPathEnv()
   registerIpc()
   createWindow()
   app.on('activate', () => {
