@@ -36,7 +36,8 @@ describe('MonitorPanel', () => {
     render(<MonitorPanel />)
     expect(await screen.findByText('750a')).toBeTruthy()
     expect(screen.getByText('100')).toBeTruthy()
-    expect(screen.getByText('Account')).toBeTruthy()
+    // 'Account' appears both as a row cell and a filter option
+    expect(screen.getAllByText('Account').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('JobComplete')).toBeTruthy()
     expect(screen.getByText('InProgress')).toBeTruthy()
   })
@@ -47,6 +48,26 @@ describe('MonitorPanel', () => {
     expect(screen.getByRole('button', { name: '✓ CSV' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '✗ CSV' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Abort' })).toBeTruthy()
+  })
+
+  it('filters the job list by object and operation', async () => {
+    render(<MonitorPanel />)
+    await screen.findByText('750a')
+
+    // Filter to Contact -> only the query job remains
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by object' }), {
+      target: { value: 'Contact' },
+    })
+    expect(screen.queryByText('750a')).toBeNull()
+    expect(screen.getByText('750q')).toBeTruthy()
+
+    // Clear, then filter by operation = insert -> only the ingest job
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by operation' }), {
+      target: { value: 'insert' },
+    })
+    expect(screen.getByText('750a')).toBeTruthy()
+    expect(screen.queryByText('750q')).toBeNull()
   })
 
   it('downloads success results through the file dialog', async () => {

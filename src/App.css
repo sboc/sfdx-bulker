@@ -406,6 +406,11 @@ textarea:focus {
   gap: 6px;
   margin: 0;
 }
+.filter {
+  padding: 6px 10px;
+  font-size: 13px;
+  max-width: 200px;
+}
 
 /* Job table */
 .table {

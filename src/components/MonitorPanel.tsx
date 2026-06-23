@@ -1,14 +1,32 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, unwrap } from '../api'
 import type { JobInfo, ResultKind } from '../shared/types'
 
 const ACTIVE = new Set(['Open', 'UploadComplete', 'InProgress'])
+
+/** Operation as shown in the table (query jobs report their own operation). */
+const displayOp = (j: JobInfo) => (j.isQuery ? 'query' : j.operation)
+const sortedUnique = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort()
 
 export function MonitorPanel() {
   const [jobs, setJobs] = useState<JobInfo[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [auto, setAuto] = useState(true)
+  const [objectFilter, setObjectFilter] = useState('')
+  const [opFilter, setOpFilter] = useState('')
+
+  const objectOptions = useMemo(() => sortedUnique(jobs.map((j) => j.object)), [jobs])
+  const opOptions = useMemo(() => sortedUnique(jobs.map(displayOp)), [jobs])
+  const filtered = useMemo(
+    () =>
+      jobs.filter(
+        (j) =>
+          (!objectFilter || j.object === objectFilter) &&
+          (!opFilter || displayOp(j) === opFilter),
+      ),
+    [jobs, objectFilter, opFilter],
+  )
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -41,6 +59,43 @@ export function MonitorPanel() {
         <label className="toggle">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
+        <select
+          className="filter"
+          aria-label="Filter by object"
+          value={objectFilter}
+          onChange={(e) => setObjectFilter(e.target.value)}
+        >
+          <option value="">All objects</option>
+          {objectOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <select
+          className="filter"
+          aria-label="Filter by operation"
+          value={opFilter}
+          onChange={(e) => setOpFilter(e.target.value)}
+        >
+          <option value="">All operations</option>
+          {opOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        {(objectFilter || opFilter) && (
+          <button
+            className="link"
+            onClick={() => {
+              setObjectFilter('')
+              setOpFilter('')
+            }}
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {error && <div className="banner error">{error}</div>}
@@ -55,8 +110,10 @@ export function MonitorPanel() {
           <span>Failed</span>
           <span>Actions</span>
         </div>
-        {jobs.length === 0 && <div className="tr empty-row">No jobs yet.</div>}
-        {jobs.map((j) => (
+        {filtered.length === 0 && (
+          <div className="tr empty-row">{jobs.length === 0 ? 'No jobs yet.' : 'No jobs match the filters.'}</div>
+        )}
+        {filtered.map((j) => (
           <JobRow key={j.id} job={j} onRefresh={refresh} />
         ))}
       </div>
