@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
-import type { OrgIdentity } from './shared/types'
+import type { JobInfo, OrgIdentity } from './shared/types'
 import { ConnectBar } from './components/ConnectBar'
 import { LoadPanel } from './components/LoadPanel'
 import { ExtractPanel } from './components/ExtractPanel'
@@ -18,8 +18,13 @@ const TABS: { id: Tab; label: string }[] = [
 function App() {
   const [org, setOrg] = useState<OrgIdentity | null>(null)
   const [tab, setTab] = useState<Tab>('load')
-  const [monitorJobId, setMonitorJobId] = useState('')
+  const [trackedJobs, setTrackedJobs] = useState<JobInfo[]>([])
   const [ready, setReady] = useState(false)
+
+  // Track a job submitted this session, newest first, deduped by id.
+  const trackJob = (job: JobInfo) =>
+    setTrackedJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)])
+  const dismissJob = (id: string) => setTrackedJobs((prev) => prev.filter((j) => j.id !== id))
 
   useEffect(() => {
     api.auth.current().then((o) => {
@@ -50,26 +55,24 @@ function App() {
               <button
                 key={t.id}
                 className={tab === t.id ? 'tab active' : 'tab'}
-                onClick={() => {
-                  setMonitorJobId('') // manual nav shows all jobs
-                  setTab(t.id)
-                }}
+                onClick={() => setTab(t.id)}
               >
                 {t.label}
+                {t.id === 'monitor' && trackedJobs.length > 0 && (
+                  <span className="tab-badge">{trackedJobs.length}</span>
+                )}
               </button>
             ))}
           </nav>
           <main className="content">
             {tab === 'load' && (
               <LoadPanel
-                onTrackJob={(id) => {
-                  setMonitorJobId(id)
-                  setTab('monitor')
-                }}
+                onSubmitted={trackJob}
+                onViewMonitor={() => setTab('monitor')}
               />
             )}
             {tab === 'extract' && <ExtractPanel />}
-            {tab === 'monitor' && <MonitorPanel initialJobId={monitorJobId} />}
+            {tab === 'monitor' && <MonitorPanel jobs={trackedJobs} onDismiss={dismissJob} />}
           </main>
         </>
       ) : (

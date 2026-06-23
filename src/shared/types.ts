@@ -141,7 +141,6 @@ export interface BulkerApi {
     submit(req: QueryJobRequest): Promise<IpcResult<{ jobId: string; csv: string; rows: number }>>
   }
   jobs: {
-    list(): Promise<IpcResult<JobInfo[]>>
     status(jobId: string): Promise<IpcResult<JobInfo>>
     abort(jobId: string): Promise<IpcResult<null>>
     delete(jobId: string): Promise<IpcResult<null>>

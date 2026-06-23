@@ -276,52 +276,15 @@ describe('submitQuery', () => {
 })
 
 describe('job monitor', () => {
-  // The list endpoint is queried once per ingest jobType; V2Ingest holds the real jobs here.
-  function routeJobs() {
-    fetchMock.mockImplementation(async (url: URL) => {
-      const u = String(url)
-      if (u.includes('/jobs/ingest?jobType=V2Ingest')) return resp({ records: [{ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23' }] })
-      if (u.includes('/jobs/ingest?jobType=')) return resp({ records: [] })
-      if (u.endsWith('/jobs/query')) return resp({ records: [{ id: '750q', object: 'Contact', operation: 'query', state: 'JobComplete', createdDate: '2026-06-22' }] })
-      if (u.includes('/jobs/ingest/750a')) return resp({ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23', numberRecordsProcessed: 100, numberRecordsFailed: 2 })
-      if (u.includes('/jobs/query/750q')) return resp({ id: '750q', object: 'Contact', operation: 'query', state: 'JobComplete', createdDate: '2026-06-22', numberRecordsProcessed: 50 })
-      return resp({}, { ok: false, status: 404 })
-    })
-  }
-
-  it('listJobs merges ingest (V2Ingest) + query and enriches with record counts', async () => {
-    makeActive()
-    routeJobs()
-    const jobs = await sf.listJobs()
-    expect(jobs.map((j) => j.id)).toEqual(['750a', '750q']) // sorted newest-first
-    expect(jobs[0]).toMatchObject({ numberRecordsProcessed: 100, numberRecordsFailed: 2, isQuery: false })
-    expect(jobs[1]).toMatchObject({ numberRecordsProcessed: 50, isQuery: true })
-  })
-
-  it('paginates through all job pages via nextRecordsUrl', async () => {
+  it('jobStatus reads a job by id', async () => {
     makeActive()
     fetchMock.mockImplementation(async (url: URL) => {
       const u = String(url)
-      if (u.includes('/jobs/ingest?jobType=V2Ingest'))
-        return resp({
-          records: [{ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01' }],
-          done: false,
-          nextRecordsUrl: '/services/data/v62.0/jobs/ingest/?locator=L2',
-        })
-      if (u.includes('jobs/ingest/?locator=L2'))
-        return resp({
-          records: [{ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23' }],
-          done: true,
-        })
-      if (u.includes('/jobs/ingest?jobType=')) return resp({ records: [] })
-      if (u.endsWith('/jobs/query')) return resp({ records: [], done: true })
-      if (u.includes('/jobs/ingest/750new')) return resp({ id: '750new', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: '2026-06-23', numberRecordsProcessed: 5 })
-      if (u.includes('/jobs/ingest/old1')) return resp({ id: 'old1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-01', numberRecordsProcessed: 1 })
+      if (u.includes('/jobs/ingest/750a'))
+        return resp({ id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: 'd', numberRecordsProcessed: 100, numberRecordsFailed: 2 })
       return resp({}, { ok: false, status: 404 })
     })
-    const jobs = await sf.listJobs()
-    // The recent job lives on page 2; it must be fetched and sorted to the top.
-    expect(jobs.map((j) => j.id)).toEqual(['750new', 'old1'])
+    expect(await sf.jobStatus('750a')).toMatchObject({ id: '750a', numberRecordsProcessed: 100, isQuery: false })
   })
 
   it('jobStatus falls back from ingest to query', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { recordsToCsv, parseCsvPreview, splitCsvLine, remapCsv } from './csv'
+import { recordsToCsv, parseCsvPreview, splitCsvLine, remapCsv, parseCsvTable } from './csv'
 
 describe('splitCsvLine', () => {
   it('splits simple fields', () => {
@@ -88,5 +88,25 @@ describe('remapCsv', () => {
   it('returns empty string when nothing is mapped', () => {
     expect(remapCsv('A,B\n1,2', ['', ''])).toBe('')
     expect(remapCsv('', ['X'])).toBe('')
+  })
+})
+
+describe('parseCsvTable', () => {
+  it('splits header and data rows with a total count', () => {
+    const t = parseCsvTable('sf__Id,Name\n001,Acme\n002,Globex')
+    expect(t.columns).toEqual(['sf__Id', 'Name'])
+    expect(t.rows).toEqual([['001', 'Acme'], ['002', 'Globex']])
+    expect(t.total).toBe(2)
+  })
+
+  it('caps rows at maxRows but reports the true total', () => {
+    const csv = 'A\n' + Array.from({ length: 10 }, (_, i) => i).join('\n')
+    const t = parseCsvTable(csv, 3)
+    expect(t.rows).toHaveLength(3)
+    expect(t.total).toBe(10)
+  })
+
+  it('handles empty content', () => {
+    expect(parseCsvTable('')).toEqual({ columns: [], rows: [], total: 0 })
   })
 })

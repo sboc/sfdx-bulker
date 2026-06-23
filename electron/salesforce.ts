@@ -284,72 +284,7 @@ export async function submitQuery(req: QueryJobRequest): Promise<{ jobId: string
   })
 }
 
-// ---- Job monitor ----
-
-/** Max jobs to enrich with record counts per refresh (detail endpoint is one call each). */
-const ENRICH_LIMIT = 25
-/** Safety cap on pagination (each page is up to 2000 jobs). */
-const MAX_JOB_PAGES = 25
-
-interface JobListPage {
-  records: RawJobInfo[]
-  done?: boolean
-  nextRecordsUrl?: string
-}
-
-/** Ingest job types - the get-all endpoint doesn't reliably return all of these by default. */
-const INGEST_JOB_TYPES = ['V2Ingest', 'Classic', 'BigObjectIngest']
-
-/**
- * Page through a jobs list endpoint. The Bulk API returns jobs in indeterminate
- * order, up to 2000 per page, with `done: false` + `nextRecordsUrl` for the rest,
- * so we follow the locator to be sure recent jobs are included.
- */
-async function fetchJobPages(startPath: string, isQuery: boolean): Promise<JobInfo[]> {
-  const out: JobInfo[] = []
-  let path: string | undefined = startPath
-  for (let page = 0; path && page < MAX_JOB_PAGES; page++) {
-    const resp = await apiFetch(path)
-    if (!resp.ok) break
-    const body = (await resp.json()) as JobListPage
-    out.push(...body.records.map((j) => toJobInfo(j, isQuery)))
-    path = body.done === false ? body.nextRecordsUrl : undefined
-  }
-  return out
-}
-
-/** All ingest jobs, querying each job type explicitly so V2Ingest jobs are never dropped. */
-async function listIngestJobs(): Promise<JobInfo[]> {
-  const base = `/services/data/v${API_VERSION}/jobs/ingest`
-  const groups = await Promise.all(
-    INGEST_JOB_TYPES.map((t) => fetchJobPages(`${base}?jobType=${t}`, false)),
-  )
-  const byId = new Map<string, JobInfo>()
-  for (const j of groups.flat()) byId.set(j.id, j)
-  return [...byId.values()]
-}
-
-export async function listJobs(): Promise<JobInfo[]> {
-  const [ingest, query] = await Promise.all([
-    listIngestJobs(),
-    fetchJobPages(`/services/data/v${API_VERSION}/jobs/query`, true),
-  ])
-  const out = [...ingest, ...query].sort((a, b) => (a.createdDate < b.createdDate ? 1 : -1))
-
-  // The list endpoints omit record counts; fetch them from each job's detail endpoint.
-  const enriched = await Promise.all(
-    out.slice(0, ENRICH_LIMIT).map((j) => jobDetail(j.id, j.isQuery ?? false).catch(() => j)),
-  )
-  return [...enriched, ...out.slice(ENRICH_LIMIT)]
-}
-
-/** Fetch full job info (including record counts) for a known job type. */
-async function jobDetail(jobId: string, isQuery: boolean): Promise<JobInfo> {
-  const base = isQuery ? 'query' : 'ingest'
-  const resp = await apiFetch(`/services/data/v${API_VERSION}/jobs/${base}/${jobId}`)
-  if (!resp.ok) throw new Error(`Failed to fetch job ${jobId} (${resp.status})`)
-  return toJobInfo((await resp.json()) as RawJobInfo, isQuery)
-}
+// ---- Job monitor (per-job, by id) ----
 
 export async function jobStatus(jobId: string): Promise<JobInfo> {
   // Ingest jobs first; fall back to query jobs.

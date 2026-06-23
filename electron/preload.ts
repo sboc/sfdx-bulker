@@ -25,7 +25,6 @@ const api: BulkerApi = {
     submit: (req) => invoke('query:submit', req),
   },
   jobs: {
-    list: () => invoke('jobs:list'),
     status: (jobId) => invoke('jobs:status', jobId),
     abort: (jobId) => invoke('jobs:abort', jobId),
     delete: (jobId) => invoke('jobs:delete', jobId),

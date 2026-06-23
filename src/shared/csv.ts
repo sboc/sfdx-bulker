@@ -31,6 +31,22 @@ export function parseCsvPreview(content?: string): { rows: number; columns: stri
   return { rows: Math.max(0, lines.length - 1), columns: splitCsvLine(lines[0]) }
 }
 
+/** Parse a CSV into header columns + data rows (capped), for previewing results. */
+export function parseCsvTable(
+  content: string,
+  maxRows = 200,
+): { columns: string[]; rows: string[][]; total: number } {
+  const lines = content.split(/\r\n|\n/).filter((l) => l.length > 0)
+  if (lines.length === 0) return { columns: [], rows: [], total: 0 }
+  const columns = splitCsvLine(lines[0])
+  const dataLines = lines.slice(1)
+  return {
+    columns,
+    rows: dataLines.slice(0, maxRows).map(splitCsvLine),
+    total: dataLines.length,
+  }
+}
+
 /** Escape one value for CSV output. */
 export function escapeCsvValue(v: unknown): string {
   if (v === null || v === undefined) return ''

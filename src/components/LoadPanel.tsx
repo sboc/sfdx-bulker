@@ -26,7 +26,13 @@ function autoMap(columns: string[], fields: SObjectField[]): Record<string, stri
   return m
 }
 
-export function LoadPanel({ onTrackJob }: { onTrackJob?: (jobId: string) => void }) {
+export function LoadPanel({
+  onSubmitted,
+  onViewMonitor,
+}: {
+  onSubmitted?: (job: JobInfo) => void
+  onViewMonitor?: () => void
+}) {
   const [object, setObject] = useState('')
   const [objects, setObjects] = useState<SObjectInfo[]>([])
   const [objectsError, setObjectsError] = useState<string | null>(null)
@@ -137,6 +143,7 @@ export function LoadPanel({ onTrackJob }: { onTrackJob?: (jobId: string) => void
         }),
       )
       setJob(info)
+      onSubmitted?.(info)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -290,8 +297,8 @@ export function LoadPanel({ onTrackJob }: { onTrackJob?: (jobId: string) => void
           <span>
             Job <code>{job.id}</code> submitted - state <strong>{job.state}</strong>.
           </span>
-          {onTrackJob && (
-            <button className="link" onClick={() => onTrackJob(job.id)}>
+          {onViewMonitor && (
+            <button className="link" onClick={onViewMonitor}>
               View in Monitor →
             </button>
           )}

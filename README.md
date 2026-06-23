@@ -6,7 +6,7 @@ Desktop app (Electron + React) for running **Salesforce Bulk API 2.0** jobs agai
 |-----|--------------|
 | **Load** | `insert` · `update` · `upsert` · `delete` · `hardDelete` from a CSV file |
 | **Extract** | Run a SOQL query as a bulk query job, preview and save results to CSV |
-| **Monitor** | List recent ingest/query jobs, watch progress, abort/delete, download success & failure CSVs |
+| **Monitor** | Track jobs submitted this session, poll each for live progress, view/save successful · failed · unprocessed records, abort |
 
 The Salesforce browser SDK can't call the Bulk API directly (CORS), so all API
 calls run in the Electron **main process**. Tokens are stored encrypted on disk
@@ -69,8 +69,9 @@ component tests for `ConnectBar` and `LoadPanel`.
   fields) with a column mapped to it.
 - **hardDelete** permanently deletes records (bypasses the recycle bin) and
   needs the *Bulk API Hard Delete* user permission.
-- Jobs are submitted asynchronously - the **Monitor** tab polls for completion
-  and lets you download per-record success/failure results.
+- Jobs are submitted asynchronously - each submitted job is added to the
+  **Monitor** tab, which polls it for completion and lets you view and save the
+  successful / failed / unprocessed records. The tracked list is per session.
 
 ## Architecture
 

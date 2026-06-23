@@ -16,7 +16,6 @@ import {
   ingestResults,
   jobStatus,
   listConnectableOrgs,
-  listJobs,
   listObjects,
   submitIngest,
   submitQuery,
@@ -104,7 +103,6 @@ function registerIpc(): void {
   handle('query:submit', (req) => submitQuery(req as QueryJobRequest))
 
   // jobs
-  handle('jobs:list', () => listJobs())
   handle('jobs:status', (jobId) => jobStatus(jobId as string))
   handle('jobs:abort', async (jobId) => {
     await abortJob(jobId as string)

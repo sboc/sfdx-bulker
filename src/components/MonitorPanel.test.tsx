@@ -1,22 +1,15 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
-import type { IpcResult } from '../shared/types'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import type { IpcResult, JobInfo } from '../shared/types'
 
 vi.mock('../api', () => ({
   api: {
     jobs: {
-      list: vi.fn().mockResolvedValue({
-        ok: true,
-        data: [
-          { id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-06-23', numberRecordsProcessed: 100, numberRecordsFailed: 2, isQuery: false },
-          { id: '750q', object: 'Contact', operation: 'query', state: 'InProgress', createdDate: '2026-06-22', isQuery: true },
-        ],
-      }),
+      status: vi.fn(),
       abort: vi.fn().mockResolvedValue({ ok: true, data: null }),
-      delete: vi.fn().mockResolvedValue({ ok: true, data: null }),
     },
-    ingest: { results: vi.fn().mockResolvedValue({ ok: true, data: 'sf__Id\n001' }) },
+    ingest: { results: vi.fn() },
     files: { saveCsv: vi.fn().mockResolvedValue({ ok: true, data: { path: '/tmp/x.csv' } }) },
   },
   unwrap: async <T,>(p: Promise<IpcResult<T>>) => {
@@ -29,69 +22,59 @@ vi.mock('../api', () => ({
 import { MonitorPanel } from './MonitorPanel'
 import { api } from '../api'
 
+const job = (over: Partial<JobInfo> = {}): JobInfo => ({
+  id: '750a', object: 'Account', operation: 'insert', state: 'JobComplete',
+  createdDate: 'd', numberRecordsProcessed: 100, numberRecordsFailed: 2, isQuery: false, ...over,
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(api.jobs.status).mockResolvedValue({ ok: true, data: job() })
+})
 afterEach(cleanup)
 
 describe('MonitorPanel', () => {
-  it('lists jobs with their record counts and state', async () => {
-    render(<MonitorPanel />)
-    expect(await screen.findByText('750a')).toBeTruthy()
-    expect(screen.getByText('100')).toBeTruthy()
-    // 'Account' appears both as a row cell and a filter option
-    expect(screen.getAllByText('Account').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('JobComplete')).toBeTruthy()
-    expect(screen.getByText('InProgress')).toBeTruthy()
+  it('shows the empty state with no tracked jobs', () => {
+    render(<MonitorPanel jobs={[]} onDismiss={() => {}} />)
+    expect(screen.getByText(/Submit a job from the Load tab/)).toBeTruthy()
   })
 
-  it('offers result downloads for a completed ingest job and Abort for an active one', async () => {
-    render(<MonitorPanel />)
-    await screen.findByText('750a')
-    expect(screen.getByRole('button', { name: '✓ CSV' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '✗ CSV' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Abort' })).toBeTruthy()
-  })
-
-  it('filters the job list by object and operation', async () => {
-    render(<MonitorPanel />)
-    await screen.findByText('750a')
-
-    // Filter to Contact -> only the query job remains
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by object' }), {
-      target: { value: 'Contact' },
-    })
-    expect(screen.queryByText('750a')).toBeNull()
-    expect(screen.getByText('750q')).toBeTruthy()
-
-    // Clear, then filter by operation = insert -> only the ingest job
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by operation' }), {
-      target: { value: 'insert' },
-    })
+  it('renders a tracked job and polls its status for counts', async () => {
+    render(<MonitorPanel jobs={[job({ numberRecordsProcessed: undefined, numberRecordsFailed: undefined })]} onDismiss={() => {}} />)
     expect(screen.getByText('750a')).toBeTruthy()
-    expect(screen.queryByText('750q')).toBeNull()
+    // status poll fills in processed count (100)
+    expect(await screen.findByText('100')).toBeTruthy()
+    expect(api.jobs.status).toHaveBeenCalledWith('750a')
   })
 
-  it('filters by job id, and seeds the filter from initialJobId', async () => {
-    const view = render(<MonitorPanel />)
-    await screen.findByText('750a')
-    fireEvent.change(screen.getByRole('textbox', { name: 'Filter by job id' }), {
-      target: { value: '750q' },
-    })
-    expect(screen.queryByText('750a')).toBeNull()
-    expect(screen.getByText('750q')).toBeTruthy()
-    view.unmount()
+  it('views successful records in a table and saves the CSV', async () => {
+    vi.mocked(api.ingest.results).mockResolvedValue({ ok: true, data: 'sf__Id,Name\n001,Acme\n002,Globex' })
+    render(<MonitorPanel jobs={[job()]} onDismiss={() => {}} />)
 
-    render(<MonitorPanel initialJobId="750a" />)
-    await screen.findByText('750a')
-    expect(screen.queryByText('750q')).toBeNull()
+    // Successful button shows the success count (processed - failed = 98)
+    fireEvent.click(await screen.findByRole('button', { name: '✓ 98' }))
+    await waitFor(() => expect(api.ingest.results).toHaveBeenCalledWith('750a', 'successful'))
+
+    expect(await screen.findByText(/Showing 2 of 2 records/)).toBeTruthy()
+    expect(screen.getByText('Acme')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save CSV' }))
+    await waitFor(() =>
+      expect(api.files.saveCsv).toHaveBeenCalledWith('750a-successful.csv', 'sf__Id,Name\n001,Acme\n002,Globex'),
+    )
   })
 
-  it('downloads success results through the file dialog', async () => {
-    render(<MonitorPanel />)
-    await screen.findByText('750a')
-    fireEvent.click(screen.getByRole('button', { name: '✓ CSV' }))
-    await vi.waitFor(() => {
-      expect(api.ingest.results).toHaveBeenCalledWith('750a', 'successful')
-      expect(api.files.saveCsv).toHaveBeenCalledWith('750a-successful.csv', 'sf__Id\n001')
-    })
+  it('dismisses a job from the tracked list', async () => {
+    const onDismiss = vi.fn()
+    render(<MonitorPanel jobs={[job()]} onDismiss={onDismiss} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }))
+    expect(onDismiss).toHaveBeenCalledWith('750a')
+  })
+
+  it('offers Abort for an active job', async () => {
+    vi.mocked(api.jobs.status).mockResolvedValue({ ok: true, data: job({ state: 'InProgress' }) })
+    render(<MonitorPanel jobs={[job({ state: 'InProgress' })]} onDismiss={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Abort' }))
+    await waitFor(() => expect(api.jobs.abort).toHaveBeenCalledWith('750a'))
   })
 })
