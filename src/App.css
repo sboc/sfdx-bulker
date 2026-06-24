@@ -666,6 +666,20 @@ textarea:focus {
   justify-content: space-between;
   gap: 12px;
 }
+.banner.info {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid #3b82f6;
+  color: #aaccff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.suggestion-actions {
+  display: flex;
+  gap: 12px;
+  flex: 0 0 auto;
+}
 
 /* Actions row */
 .actions {

@@ -94,11 +94,10 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
   const active = !!(object || state || operation || from || to)
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
-  // Clamp the current page when the result set or page size shrinks under it.
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
-  const start = (page - 1) * pageSize
+  // Clamp during render so a shrunk result set or page size can't strand the
+  // view past the last page (no effect -> no cascading render).
+  const safePage = Math.min(page, pageCount)
+  const start = (safePage - 1) * pageSize
   const pageJobs = filtered.slice(start, start + pageSize)
 
   function monitor(job: JobInfo) {
@@ -198,18 +197,18 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
           <div className="pager-nav">
             <button
               className="btn ghost"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              onClick={() => setPage(safePage - 1)}
             >
               ← Prev
             </button>
             <span className="hint">
-              Page {page} of {pageCount}
+              Page {safePage} of {pageCount}
             </span>
             <button
               className="btn ghost"
-              disabled={page >= pageCount}
-              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+              disabled={safePage >= pageCount}
+              onClick={() => setPage(safePage + 1)}
             >
               Next →
             </button>

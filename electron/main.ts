@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { fileURLToPath } from 'node:url'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { deleteOrg } from './store'
+import { deleteOrg, saveLoadMapping, suggestLoadMapping } from './store'
 import { cliAvailable, loginCliOrg, logoutCliOrg } from './sfcli'
 import { fixPathEnv } from './path-env'
 import {
@@ -23,8 +23,10 @@ import {
   submitQuery,
 } from './salesforce'
 import type {
+  BulkOperation,
   IngestJobRequest,
   IpcResult,
+  LoadMappingInput,
   QueryJobRequest,
   ResultKind,
 } from '../src/shared/types'
@@ -118,6 +120,23 @@ function registerIpc(): void {
     return null
   })
   handle('jobs:listAll', () => listAllJobs())
+
+  // load mapping history (scoped to the active org)
+  handle('history:saveLoadMapping', (m) => {
+    const id = currentIdentity()
+    if (id) saveLoadMapping(id.organizationId, { ...(m as LoadMappingInput), updatedAt: Date.now() })
+    return null
+  })
+  handle('history:suggestMapping', (q) => {
+    const id = currentIdentity()
+    if (!id) return null
+    const { object, operation, columns } = q as {
+      object: string
+      operation: BulkOperation
+      columns: string[]
+    }
+    return suggestLoadMapping(id.organizationId, object, operation, columns)
+  })
 
   // files
   handle('files:openCsv', async () => {

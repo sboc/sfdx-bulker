@@ -3,7 +3,14 @@ import { api, unwrap } from '../api'
 import { combineCsvs, parseCsvPreview, remapCsv } from '../shared/csv'
 import { bestMatch, fuzzyThreshold } from '../shared/fuzzy'
 import { Combo } from './Combo'
-import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
+import type {
+  BulkOperation,
+  JobInfo,
+  LineEnding,
+  LoadMapping,
+  SObjectField,
+  SObjectInfo,
+} from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
   { id: 'insert', label: 'Insert', desc: 'Create new records' },
@@ -53,6 +60,7 @@ export function LoadPanel({
   const [error, setError] = useState<string | null>(null)
   const [job, setJob] = useState<JobInfo | null>(null)
   const [step, setStep] = useState(1)
+  const [suggestion, setSuggestion] = useState<LoadMapping | null>(null)
 
   const preview = useMemo(() => parseCsvPreview(file?.content), [file])
   const mapReady = fields.length > 0 && fieldsObject === object && !!preview
@@ -89,6 +97,41 @@ export function LoadPanel({
       clearTimeout(t)
     }
   }, [object, preview, objects])
+
+  // Offer a remembered mapping when this org last loaded the same object +
+  // operation with the same CSV columns. Non-destructive; the user opts in.
+  useEffect(() => {
+    if (!object.trim() || !preview) return
+    let cancelled = false
+    api.history
+      .suggestMapping({ object: object.trim(), operation, columns: preview.columns })
+      .then((r) => {
+        if (!cancelled) setSuggestion(r.ok ? (r.data ?? null) : null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [object, operation, preview])
+
+  // Only surface a suggestion that still matches the current selection (a query
+  // for a previous object/op can resolve after the user has moved on).
+  const colsKey = preview ? [...preview.columns].sort().join('') : ''
+  const showSuggestion =
+    suggestion &&
+    suggestion.object === object.trim() &&
+    suggestion.operation === operation &&
+    [...suggestion.columns].sort().join('') === colsKey
+
+  function applySuggestion() {
+    if (!suggestion) return
+    if (destructive) {
+      if (suggestion.idColumn) setIdColumn(suggestion.idColumn)
+    } else {
+      setMapping({ ...suggestion.mapping })
+      if (suggestion.externalIdField) setExternalId(suggestion.externalIdField)
+    }
+    setSuggestion(null)
+  }
 
   const selectableFields = useMemo(
     () => fields.filter((f) => f.createable || f.updateable || f.name === 'Id'),
@@ -185,6 +228,15 @@ export function LoadPanel({
       )
       setJob(info)
       onSubmitted?.(info)
+      // Remember this mapping so a future matching load can reuse it.
+      void api.history.saveLoadMapping({
+        object: object.trim(),
+        operation,
+        columns: preview.columns,
+        mapping: destructive ? {} : mapping,
+        externalIdField: operation === 'upsert' ? externalId.trim() || undefined : undefined,
+        idColumn: destructive ? idColumn : undefined,
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -309,6 +361,22 @@ export function LoadPanel({
       {preview && (
         <div className="card">
           <h3>{destructive ? 'Record Id' : 'Field mapping'}</h3>
+          {showSuggestion && suggestion && (
+            <div className="banner info suggestion">
+              <span>
+                Saved mapping found from a previous <strong>{suggestion.operation}</strong> on{' '}
+                <strong>{suggestion.object}</strong> with the same columns.
+              </span>
+              <span className="suggestion-actions">
+                <button className="link" onClick={applySuggestion}>
+                  Apply
+                </button>
+                <button className="link" onClick={() => setSuggestion(null)}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          )}
           {destructive ? (
             <>
               <p className="hint">

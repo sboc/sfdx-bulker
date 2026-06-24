@@ -147,6 +147,38 @@ describe('deleteOrg', () => {
   })
 })
 
+describe('load mapping history', () => {
+  const m = {
+    object: 'Account',
+    operation: 'insert' as const,
+    columns: ['Name', 'Email'],
+    mapping: { Name: 'Name', Email: 'Email__c' },
+    updatedAt: 1,
+  }
+
+  it('saves and suggests a mapping for the same object + operation + column set', () => {
+    store.saveLoadMapping('org1', m)
+    // Column order does not matter for the match.
+    const hit = store.suggestLoadMapping('org1', 'Account', 'insert', ['Email', 'Name'])
+    expect(hit?.mapping).toEqual({ Name: 'Name', Email: 'Email__c' })
+  })
+
+  it('does not suggest across orgs, operations, objects, or differing columns', () => {
+    store.saveLoadMapping('org1', m)
+    expect(store.suggestLoadMapping('org2', 'Account', 'insert', ['Name', 'Email'])).toBeNull()
+    expect(store.suggestLoadMapping('org1', 'Account', 'update', ['Name', 'Email'])).toBeNull()
+    expect(store.suggestLoadMapping('org1', 'Contact', 'insert', ['Name', 'Email'])).toBeNull()
+    expect(store.suggestLoadMapping('org1', 'Account', 'insert', ['Name'])).toBeNull()
+  })
+
+  it('replaces a prior mapping with the same signature (latest wins)', () => {
+    store.saveLoadMapping('org1', m)
+    store.saveLoadMapping('org1', { ...m, mapping: { Name: 'FirstName', Email: '' }, updatedAt: 2 })
+    const hit = store.suggestLoadMapping('org1', 'Account', 'insert', ['Name', 'Email'])
+    expect(hit?.mapping).toEqual({ Name: 'FirstName', Email: '' })
+  })
+})
+
 describe('legacy migration', () => {
   it('converts the old single-org config into a saved org and drops legacy keys', () => {
     const legacy = {
