@@ -73,9 +73,10 @@ npm run test:watch # watch mode
 
 Vitest covers the pure logic (CSV build/parse, fuzzy matching, org-URL handling,
 CLI org-list parsing, job-info mapping, encrypted store, PATH recovery, OAuth token
-grants, and the PKCE web-login loopback flow) in a node environment, plus jsdom +
-Testing Library component tests for `ConnectBar`, `LoadPanel`, `ExtractPanel`,
-`JobsPanel`, and `MonitorPanel`.
+grants, the PKCE web-login loopback flow, and the `unwrap` IPC helper) in a node
+environment, plus jsdom + Testing Library component tests for `ConnectBar`,
+`LoadPanel`, `ExtractPanel`, `JobsPanel`, `MonitorPanel`, `SoqlEditor` (SOQL
+autocomplete), and `Combo` (the searchable picker).
 
 ## Operations notes
 
