@@ -68,14 +68,19 @@ export function MonitorPanel({ jobs, onTrack, onDismiss }: Props) {
     setLoading(false)
   }, [jobs])
 
+  const anyActive = useMemo(
+    () => jobs.some((j) => ACTIVE.has((statuses[j.id] ?? j).state)),
+    [jobs, statuses],
+  )
+
   useEffect(() => {
     const kick = setTimeout(refresh, 0)
-    const poll = auto ? setInterval(refresh, 4000) : undefined
+    const poll = auto && anyActive ? setInterval(refresh, 4000) : undefined
     return () => {
       clearTimeout(kick)
       if (poll) clearInterval(poll)
     }
-  }, [auto, refresh])
+  }, [auto, anyActive, refresh])
 
   async function view(job: JobInfo, kind: ResultKind) {
     const base = { jobId: job.id, object: job.object, operation: job.operation, kind }
@@ -91,12 +96,14 @@ export function MonitorPanel({ jobs, onTrack, onDismiss }: Props) {
   return (
     <div className="panel">
       <div className="toolbar">
-        <button className="btn ghost" onClick={refresh} disabled={loading || jobs.length === 0}>
-          {loading ? 'Refreshing…' : '↻ Refresh'}
-        </button>
         <label className="toggle">
           <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto
         </label>
+        {!auto && (
+          <button className="btn ghost" onClick={refresh} disabled={loading || jobs.length === 0}>
+            {loading ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        )}
         <span className="toolbar-sep" />
         <input
           className="filter"
