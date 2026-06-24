@@ -302,6 +302,90 @@ textarea:focus {
   color: var(--muted);
   margin-bottom: 8px;
 }
+.error-summary {
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.error-summary > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff9ea1;
+}
+.error-summary ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.error-summary li {
+  padding: 4px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+.error-pick {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  cursor: pointer;
+}
+.error-pick input {
+  flex: none;
+}
+.error-summary .error-count {
+  flex: none;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.error-summary .error-message {
+  color: #ff9ea1;
+  word-break: break-word;
+}
+.retry-section {
+  margin: 14px 0;
+}
+.retry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.retry-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.retry-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.retry-row select,
+.retry-row input {
+  flex: 1;
+  min-width: 0;
+}
+.retry-null {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.retry-null input {
+  flex: none;
+}
+.retry-key {
+  display: block;
+  margin: 12px 0;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;
