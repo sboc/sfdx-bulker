@@ -93,10 +93,21 @@ describe('MonitorPanel', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'replace column' }), {
       target: { value: 'Status' },
     })
-    // find-value dropdown is fed the distinct errored values of the chosen column
+    // find-value dropdown lists only values referenced in the error message
+    const datalistValues = () =>
+      [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
+    expect(datalistValues()).toContain('Activ') // Status 'Activ' appears in the error text
+
+    // a column whose values aren't named in the error has no candidates
+    fireEvent.change(screen.getByRole('combobox', { name: 'replace column' }), {
+      target: { value: 'Name' },
+    })
+    expect(datalistValues()).toEqual([]) // 'Acme'/'Globex' never appear in the errors
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'replace column' }), {
+      target: { value: 'Status' },
+    })
     fireEvent.change(screen.getByPlaceholderText('find value'), { target: { value: 'Activ' } })
-    const opts = [...document.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))
-    expect(opts).toContain('Activ')
     fireEvent.change(screen.getByPlaceholderText('replace with'), { target: { value: 'Active' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry 2 records' }))

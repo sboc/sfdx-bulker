@@ -321,6 +321,7 @@ textarea:focus {
   padding: 0;
   max-height: 180px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .error-summary li {
   padding: 4px 0;
@@ -329,8 +330,10 @@ textarea:focus {
 }
 .error-pick {
   display: flex;
+  flex-direction: row;
   gap: 10px;
-  align-items: baseline;
+  align-items: center;
+  margin-bottom: 0;
   cursor: pointer;
 }
 .error-pick input {
@@ -338,14 +341,18 @@ textarea:focus {
 }
 .error-summary .error-count {
   flex: none;
-  min-width: 44px;
+  min-width: 52px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
 .error-summary .error-message {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #ff9ea1;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .retry-section {
   margin: 14px 0;
@@ -373,8 +380,10 @@ textarea:focus {
 .retry-null {
   flex: none;
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 4px;
+  margin-bottom: 0;
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
@@ -619,6 +628,9 @@ textarea:focus {
   padding: 24px;
   width: 460px;
   max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 .modal.wide {
   width: 900px;
@@ -626,6 +638,29 @@ textarea:focus {
 .modal h2 {
   margin: 0 0 12px;
   font-size: 18px;
+  flex: none;
+}
+/* Scrollable middle so the pinned header + action buttons stay in view. */
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* Results view: fill the modal and let the table scroll internally, so the
+   modal-body itself doesn't add a second outer scrollbar. */
+.modal-body.results-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.results-body .error-summary,
+.results-body .preview-meta {
+  flex: none;
+}
+.results-body .result-table {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 .result-table {
   max-height: 55vh;
@@ -679,5 +714,6 @@ textarea:focus {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 14px;
+  flex: none;
 }

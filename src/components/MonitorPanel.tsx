@@ -311,6 +311,7 @@ function ResultsModal({
         <h2>
           {KIND_LABEL[viewing.kind]} records <span className="mono small">{viewing.jobId}</span>
         </h2>
+        <div className="modal-body results-body">
         {viewing.loading ? (
           <p className="hint">Loading results…</p>
         ) : viewing.error ? (
@@ -333,7 +334,9 @@ function ResultsModal({
                           onChange={() => toggle(e.message)}
                         />
                         <span className="error-count">{e.count}×</span>
-                        <span className="error-message">{e.message}</span>
+                        <span className="error-message" title={e.message}>
+                          {e.message}
+                        </span>
                       </label>
                     </li>
                   ))}
@@ -367,6 +370,7 @@ function ResultsModal({
         ) : (
           <p className="hint">No {viewing.kind} records.</p>
         )}
+        </div>
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>
             Close
@@ -432,17 +436,22 @@ function RetryEditor({
     () => parsed.rows.filter((r) => selected.has((r[parsed.errCol] ?? '').trim())),
     [parsed, selected],
   )
-  // Distinct values present in each column among the failed rows - the candidates to replace.
+  // Candidate find-values per column: only cell values that actually appear in
+  // their row's error message (i.e. the value Salesforce flagged), not every
+  // value in the failed rows.
   const valuesByColumn = useMemo(() => {
     const m = new Map<string, string[]>()
     for (const c of parsed.columns) {
       const ci = parsed.columns.indexOf(c)
       const set = new Set<string>()
-      for (const row of matchedRows) set.add(row[ci] ?? '')
-      m.set(c, Array.from(set).filter(Boolean).sort())
+      for (const row of matchedRows) {
+        const v = (row[ci] ?? '').trim()
+        if (v && (row[parsed.errCol] ?? '').includes(v)) set.add(v)
+      }
+      m.set(c, Array.from(set).sort())
     }
     return m
-  }, [parsed.columns, matchedRows])
+  }, [parsed.columns, parsed.errCol, matchedRows])
 
   const [fields, setFields] = useState<SObjectField[]>([])
   const [externalId, setExternalId] = useState('')
@@ -529,6 +538,7 @@ function RetryEditor({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <h2>Fix &amp; retry</h2>
+        <div className="modal-body">
         <div className="preview-meta">
           {rowCount} record{rowCount === 1 ? '' : 's'} from {selected.size} error group
           {selected.size === 1 ? '' : 's'} · resubmitting as <strong>{viewing.operation}</strong> on{' '}
@@ -712,6 +722,7 @@ function RetryEditor({
         </div>
 
         {error && <div className="banner error">{error}</div>}
+        </div>
 
         <div className="modal-actions">
           <button className="btn ghost" onClick={onBack} disabled={busy}>
