@@ -342,6 +342,24 @@ textarea:focus {
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
+/* Popup anchored via inline top/left/width; escapes scrollable ancestors. */
+.combo-list.fixed {
+  position: fixed;
+  right: auto;
+  z-index: 50;
+}
+.combo.unmapped input {
+  color: var(--muted);
+  border-style: dashed;
+}
+.combo.dupe input {
+  border-color: var(--danger);
+  color: #ff9ea1;
+}
+.combo-clear {
+  color: var(--muted);
+  font-size: 13px;
+}
 .combo-list li {
   display: flex;
   align-items: baseline;

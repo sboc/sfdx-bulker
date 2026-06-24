@@ -24,7 +24,11 @@ export function ExtractPanel() {
 
   async function save() {
     if (!result) return
-    await unwrap(api.files.saveCsv('extract.csv', result.csv))
+    try {
+      await unwrap(api.files.saveCsv('extract.csv', result.csv))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   return (

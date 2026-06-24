@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, unwrap } from '../api'
 import { combineCsvs, parseCsvPreview, remapCsv } from '../shared/csv'
 import { bestMatch, fuzzyThreshold } from '../shared/fuzzy'
+import { Combo } from './Combo'
 import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
@@ -39,7 +40,7 @@ export function LoadPanel({
   const [objectsError, setObjectsError] = useState<string | null>(null)
   const [operation, setOperation] = useState<BulkOperation>('insert')
   const [externalId, setExternalId] = useState('')
-  const [lineEnding] = useState<LineEnding>('LF')
+  const lineEnding: LineEnding = 'LF'
   const [file, setFile] = useState<{ name: string; content: string } | null>(null)
   // Files picked that couldn't be combined strictly - offer a shared-columns combine.
   const [mismatched, setMismatched] = useState<{ name: string; content: string }[] | null>(null)
@@ -248,18 +249,16 @@ export function LoadPanel({
             <label>
               External Id field
               {externalIdFields.length > 0 ? (
-                <select
-                  aria-label="External Id field"
+                <Combo
+                  options={externalIdFields.map((f) => ({
+                    value: f.name,
+                    label: f.name,
+                    hint: f.label,
+                  }))}
                   value={externalId}
-                  onChange={(e) => setExternalId(e.target.value)}
-                >
-                  <option value="">Select a field…</option>
-                  {externalIdFields.map((f) => (
-                    <option key={f.name} value={f.name}>
-                      {f.label} ({f.name})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setExternalId}
+                  placeholder="Search external Id field…"
+                />
               ) : (
                 <input
                   value={externalId}
@@ -318,14 +317,12 @@ export function LoadPanel({
               </p>
               <label>
                 Id column
-                <select value={idColumn} onChange={(e) => setIdColumn(e.target.value)}>
-                  <option value="">Select a column…</option>
-                  {preview.columns.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <Combo
+                  options={preview.columns.map((c) => ({ value: c, label: c }))}
+                  value={idColumn}
+                  onChange={setIdColumn}
+                  placeholder="Search column…"
+                />
               </label>
             </>
           ) : !objects.some((o) => o.name === object) ? (
@@ -355,24 +352,24 @@ export function LoadPanel({
                       {col}
                     </span>
                     <span className="map-arrow">→</span>
-                    <select
+                    <Combo
                       className={
                         mapping[col]
                           ? duplicateTargets.has(mapping[col])
-                            ? 'map-target dupe'
-                            : 'map-target'
-                          : 'map-target unmapped'
+                            ? 'dupe'
+                            : ''
+                          : 'unmapped'
                       }
+                      options={selectableFields.map((f) => ({
+                        value: f.name,
+                        label: f.name,
+                        hint: f.label,
+                      }))}
                       value={mapping[col] ?? ''}
-                      onChange={(e) => setMapping({ ...mapping, [col]: e.target.value })}
-                    >
-                      <option value="">— ignore —</option>
-                      {selectableFields.map((f) => (
-                        <option key={f.name} value={f.name}>
-                          {f.label} ({f.name})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setMapping({ ...mapping, [col]: v })}
+                      placeholder="Search field…"
+                      clearLabel="— ignore —"
+                    />
                   </div>
                 ))}
               </div>

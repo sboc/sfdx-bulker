@@ -41,6 +41,18 @@ async function chooseFile(name = /data\.csv/) {
   await screen.findByRole('button', { name })
 }
 
+/** Advance the wizard from step 1 (Configure) to step 2 (mapping & run). */
+function goToStep2() {
+  fireEvent.click(screen.getByRole('button', { name: /^Next:/ }))
+}
+
+/** Pick a value in a searchable Combo by typing then clicking the option. */
+function chooseInCombo(input: HTMLElement, query: string, optionName: RegExp) {
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: query } })
+  fireEvent.mouseDown(screen.getByRole('option', { name: optionName }))
+}
+
 describe('LoadPanel render', () => {
   it('loads objects into the sObject field and lists every operation', async () => {
     render(<LoadPanel />)
@@ -54,24 +66,23 @@ describe('LoadPanel render', () => {
     render(<LoadPanel />)
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Cont' } })
-    // only matching object listed
-    const options = screen.getAllByRole('option')
-    expect(options).toHaveLength(1)
+    // Contact is the best (prefix) match, so it ranks first.
+    expect(screen.getAllByRole('option')[0].textContent).toMatch(/Contact/)
     fireEvent.mouseDown(screen.getByRole('option', { name: /Contact/ }))
     expect((obj as HTMLInputElement).value).toBe('Contact')
   })
 
-  it('disables Run until an sObject and file are chosen', async () => {
+  it('disables advancing until an sObject and file are chosen', async () => {
     render(<LoadPanel />)
     await screen.findByPlaceholderText('Search 2 objects…')
-    expect((screen.getByRole('button', { name: /Run insert/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: /^Next:/ }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows row/column counts after a file is chosen', async () => {
     render(<LoadPanel />)
     await screen.findByPlaceholderText('Search 2 objects…')
     await chooseFile()
-    expect(screen.getByText('2')).toBeTruthy() // 2 rows
+    expect(screen.getByText('2', { selector: 'strong' })).toBeTruthy() // 2 rows
   })
 })
 
@@ -115,6 +126,7 @@ describe('LoadPanel multi-file', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Combine shared columns only' }))
 
     expect(await screen.findByText(/shared columns \(2 rows\)/)).toBeTruthy()
+    goToStep2()
     fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
     await waitFor(() =>
       expect(api.ingest.submit).toHaveBeenCalledWith(
@@ -130,6 +142,7 @@ describe('LoadPanel submit', () => {
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Account' } })
     await chooseFile()
+    goToStep2()
     fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
 
     await waitFor(() =>
@@ -140,15 +153,15 @@ describe('LoadPanel submit', () => {
     expect(await screen.findByText('750a')).toBeTruthy()
   })
 
-  it('blocks upsert without an external Id field', async () => {
+  it('blocks advancing on upsert without an external Id field', async () => {
     render(<LoadPanel />)
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Account' } })
     fireEvent.click(screen.getAllByRole('radio')[2]) // upsert
     await chooseFile()
-    fireEvent.click(screen.getByRole('button', { name: /Run upsert/ }))
 
-    expect(await screen.findByText(/requires an external Id field/i)).toBeTruthy()
+    // Object + file are set, but the external Id is still required to continue.
+    expect((screen.getByRole('button', { name: /^Next:/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(api.ingest.submit).not.toHaveBeenCalled()
   })
 
@@ -165,11 +178,10 @@ describe('LoadPanel submit', () => {
     fireEvent.change(obj, { target: { value: 'Account' } })
     fireEvent.click(screen.getAllByRole('radio')[2]) // upsert
 
-    // External Id field is a dropdown (not a text input) listing externalId/Id fields
-    const select = (await screen.findByRole('combobox', {
-      name: 'External Id field',
-    })) as HTMLSelectElement
-    expect([...select.options].map((o) => o.value)).toContain('Ext__c')
+    // External Id field is a searchable combo listing externalId/Id fields.
+    const extInput = await screen.findByPlaceholderText('Search external Id field…')
+    fireEvent.focus(extInput)
+    expect(screen.getByRole('option', { name: /Ext__c/ })).toBeTruthy()
   })
 
   it('surfaces a submit error', async () => {
@@ -178,6 +190,7 @@ describe('LoadPanel submit', () => {
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Account' } })
     await chooseFile()
+    goToStep2()
     fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
     expect(await screen.findByText('bulk boom')).toBeTruthy()
   })
@@ -201,6 +214,7 @@ describe('LoadPanel field mapping', () => {
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Account' } })
     await chooseFile(/c\.csv/)
+    goToStep2()
 
     // Auto-match: Name -> Name, Email -> Email__c (matched by label)
     expect(await screen.findByText('2 of 2 columns mapped')).toBeTruthy()
@@ -226,15 +240,16 @@ describe('LoadPanel field mapping', () => {
       data: [{ name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' }],
     })
 
-    const { container } = render(<LoadPanel />)
+    render(<LoadPanel />)
     const obj = await screen.findByPlaceholderText('Search 2 objects…')
     fireEvent.change(obj, { target: { value: 'Account' } })
     await chooseFile(/c\.csv/)
+    goToStep2()
     await screen.findByText('2 of 2 columns mapped')
 
     // Point the second column (Email) at Name too -> duplicate
-    const targets = container.querySelectorAll<HTMLSelectElement>('select.map-target')
-    fireEvent.change(targets[1], { target: { value: 'Name' } })
+    const targets = screen.getAllByPlaceholderText('Search field…')
+    chooseInCombo(targets[1], 'Name', /Name/)
 
     expect(await screen.findByText(/Duplicated: Name/)).toBeTruthy()
     expect((screen.getByRole('button', { name: /Run insert/ }) as HTMLButtonElement).disabled).toBe(true)

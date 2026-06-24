@@ -9,6 +9,11 @@ vi.mock('../api', () => ({
       submit: vi.fn().mockResolvedValue({ ok: true, data: { jobId: '750q', csv: 'Id,Name\n1,Acme', rows: 1 } }),
     },
     files: { saveCsv: vi.fn().mockResolvedValue({ ok: true, data: { path: '/tmp/extract.csv' } }) },
+    // SoqlEditor (autocomplete) loads object metadata on mount.
+    metadata: {
+      listObjects: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+      describeObject: vi.fn().mockResolvedValue({ ok: true, data: [] }),
+    },
   },
   unwrap: async <T,>(p: Promise<IpcResult<T>>) => {
     const r = await p
