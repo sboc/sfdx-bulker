@@ -47,7 +47,7 @@ vi.mock('node:child_process', () => {
   return { execFile }
 })
 
-import { listCliOrgs, getCliOrgAuth, loginCliOrg, logoutCliOrg, parseCliOrgList, type CliOrgListResult } from './sfcli'
+import { listCliOrgs, getCliOrgAuth, loginCliOrg, logoutCliOrg, cliAvailable, parseCliOrgList, type CliOrgListResult } from './sfcli'
 
 const sfCalls = () => ((globalThis as Record<string, unknown>).__sfCalls as string[][]) ?? []
 beforeEach(() => {
@@ -119,5 +119,25 @@ describe('logoutCliOrg', () => {
 
   it('surfaces the CLI error message from its JSON payload', async () => {
     await expect(logoutCliOrg('fail@x')).rejects.toThrow('Logout failed')
+  })
+})
+
+describe('cliAvailable', () => {
+  it('returns true when a binary resolves', async () => {
+    expect(await cliAvailable()).toBe(true)
+  })
+
+  it('returns false when no `sf`/`sfdx` binary is found', async () => {
+    // Fresh module + a child_process that ENOENTs on every spawn (no cached bin).
+    vi.resetModules()
+    vi.doMock('node:child_process', () => {
+      const PROMISIFY = Symbol.for('nodejs.util.promisify.custom')
+      const impl = () => Promise.reject(Object.assign(new Error('not found'), { code: 'ENOENT' }))
+      return { execFile: Object.assign(vi.fn(), { [PROMISIFY]: impl }) }
+    })
+    const { cliAvailable: fresh } = await import('./sfcli')
+    expect(await fresh()).toBe(false)
+    vi.doUnmock('node:child_process')
+    vi.resetModules()
   })
 })

@@ -12,6 +12,8 @@ vi.mock('../api', () => ({
       deleteOrg: vi.fn(),
       logoutCli: vi.fn(),
       loginCli: vi.fn(),
+      loginWeb: vi.fn(),
+      cliAvailable: vi.fn(),
     },
   },
   unwrap: async <T,>(p: Promise<IpcResult<T>>) => {
@@ -49,6 +51,8 @@ beforeEach(() => {
   m.deleteOrg.mockResolvedValue({ ok: true, data: null })
   m.logoutCli.mockResolvedValue({ ok: true, data: null })
   m.loginCli.mockResolvedValue({ ok: true, data: { username: 'new@x' } })
+  m.loginWeb.mockResolvedValue({ ok: true, data: IDENTITY })
+  m.cliAvailable.mockResolvedValue({ ok: true, data: true })
   orgsOk([cli()])
 })
 afterEach(cleanup)
@@ -141,7 +145,31 @@ describe('Add org (CLI login)', () => {
     render(<ConnectBar org={null} onChange={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Orgs' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Add org' }))
+    // Wait for the CLI-availability probe to settle (enables the button).
+    await screen.findByPlaceholderText(/prod, uat/)
     fireEvent.click(screen.getByRole('button', { name: 'Open browser to log in' }))
     expect(await screen.findByText('login boom')).toBeTruthy()
+  })
+})
+
+describe('Add org (CLI-free browser login)', () => {
+  it('logs in via the in-app OAuth flow when the CLI is unavailable', async () => {
+    m.cliAvailable.mockResolvedValue({ ok: true, data: false })
+    render(<ConnectBar org={null} onChange={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Orgs' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add org' }))
+    // No-CLI hint is shown in place of the `sf` CLI copy.
+    expect(await screen.findByText(/no Salesforce CLI required/i)).toBeTruthy()
+
+    fireEvent.change(await screen.findByPlaceholderText(/prod, uat/), { target: { value: 'uat' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open browser to log in' }))
+
+    await waitFor(() =>
+      expect(m.loginWeb).toHaveBeenCalledWith({
+        alias: 'uat',
+        instanceUrl: 'https://login.salesforce.com',
+      }),
+    )
+    expect(m.loginCli).not.toHaveBeenCalled()
   })
 })

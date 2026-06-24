@@ -16,7 +16,7 @@ export interface ConnectedAppConfig {
   loginUrl: string
 }
 
-export type OrgSource = 'client-credentials' | 'cli'
+export type OrgSource = 'client-credentials' | 'cli' | 'oauth'
 
 /** A saved org connection (credentials live encrypted in the main process). */
 export interface SavedOrg {
@@ -124,8 +124,12 @@ export interface BulkerApi {
     connect(id: string): Promise<IpcResult<OrgIdentity>>
     disconnect(): Promise<IpcResult<null>>
     current(): Promise<OrgIdentity | null>
+    /** Whether the Salesforce CLI is installed (decides which login path the UI offers). */
+    cliAvailable(): Promise<IpcResult<boolean>>
     /** Launch `sf org login web` (opens a browser). Resolves with the new username. */
     loginCli(opts: { alias?: string; instanceUrl: string }): Promise<IpcResult<{ username: string }>>
+    /** CLI-free browser login (OAuth PKCE). Resolves with the connected org identity. */
+    loginWeb(opts: { alias?: string; instanceUrl: string }): Promise<IpcResult<OrgIdentity>>
     /** Log an org out of the Salesforce CLI. */
     logoutCli(username: string): Promise<IpcResult<null>>
   }

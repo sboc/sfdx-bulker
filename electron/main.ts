@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { deleteOrg } from './store'
-import { loginCliOrg, logoutCliOrg } from './sfcli'
+import { cliAvailable, loginCliOrg, logoutCliOrg } from './sfcli'
 import { fixPathEnv } from './path-env'
 import {
   abortJob,
@@ -16,6 +16,7 @@ import {
   jobStatus,
   listConnectableOrgs,
   listObjects,
+  loginWeb,
   submitIngest,
   submitQuery,
 } from './salesforce'
@@ -88,7 +89,9 @@ function registerIpc(): void {
     disconnect()
     return null
   })
+  handle('auth:cliAvailable', () => cliAvailable())
   handle('auth:loginCli', (opts) => loginCliOrg(opts as { alias?: string; instanceUrl: string }))
+  handle('auth:loginWeb', (opts) => loginWeb(opts as { alias?: string; instanceUrl: string }))
   handle('auth:logoutCli', async (username) => {
     await logoutCliOrg(username as string)
     forgetCliSession(username as string)

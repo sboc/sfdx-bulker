@@ -3,15 +3,18 @@ import type { Connection } from 'jsforce'
 import {
   getActiveOrgId,
   getOrg,
+  getOrgRefreshToken,
   getOrgSecret,
   getOrgTokens,
   listOrgs,
+  saveOAuthOrg,
   setActiveOrgId,
   setOrgTokens,
   type StoredTokens,
 } from './store'
-import { requestClientCredentialsToken, type TokenResponse } from './oauth'
+import { requestClientCredentialsToken, requestRefreshToken, type TokenResponse } from './oauth'
 import { getCliOrgAuth, listCliOrgs as listCliOrgsRaw } from './sfcli'
+import { runWebLogin, OAUTH_CLIENT_ID } from './web-oauth'
 import { toJobInfo, type RawJobInfo } from './transform'
 import { recordsToCsv } from '../src/shared/csv'
 import type {
@@ -66,6 +69,11 @@ async function acquireToken(orgId: string): Promise<TokenResponse> {
     const auth = await getCliOrgAuth(org.cliUsername)
     return { access_token: auth.accessToken, instance_url: auth.instanceUrl, token_type: 'Bearer' }
   }
+  if (org.source === 'oauth') {
+    const refreshToken = getOrgRefreshToken(orgId)
+    if (!refreshToken) throw new Error('Org has no stored refresh token. Sign in again.')
+    return requestRefreshToken(org.loginUrl, OAUTH_CLIENT_ID, refreshToken)
+  }
   if (!org.clientId) throw new Error('Org is missing its Consumer Key.')
   const secret = getOrgSecret(orgId)
   if (!secret) throw new Error('No Consumer Secret configured for this org.')
@@ -76,6 +84,33 @@ async function acquireToken(orgId: string): Promise<TokenResponse> {
 export async function connect(orgId: string): Promise<OrgIdentity> {
   const token = await acquireToken(orgId)
   const identity = await fetchIdentity(token)
+  setOrgTokens(orgId, {
+    accessToken: token.access_token,
+    instanceUrl: token.instance_url,
+    username: identity.username,
+    displayName: identity.displayName,
+    organizationId: identity.organizationId,
+    userId: identity.userId,
+  })
+  setActiveOrgId(orgId)
+  return identity
+}
+
+/**
+ * CLI-free browser login: runs the OAuth web flow (PKCE), persists the org with its
+ * refresh token, signs in, and makes it the active connection. `instanceUrl` is the
+ * chosen login host (login/test.salesforce.com or a My Domain).
+ */
+export async function loginWeb(opts: { alias?: string; instanceUrl: string }): Promise<OrgIdentity> {
+  const token = await runWebLogin({ instanceUrl: opts.instanceUrl })
+  const identity = await fetchIdentity(token)
+  // Store the org keyed by its real instance URL so token refresh hits the right host.
+  const orgId = saveOAuthOrg({
+    name: opts.alias?.trim() || identity.username,
+    loginUrl: token.instance_url,
+    clientId: OAUTH_CLIENT_ID,
+    refreshToken: token.refresh_token as string,
+  })
   setOrgTokens(orgId, {
     accessToken: token.access_token,
     instanceUrl: token.instance_url,

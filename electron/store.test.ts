@@ -56,6 +56,39 @@ describe('saveOrg / listOrgs / getOrg', () => {
   })
 })
 
+describe('saveOAuthOrg / getOrgRefreshToken', () => {
+  it('creates an oauth org that can connect and round-trips its refresh token', () => {
+    const id = store.saveOAuthOrg({
+      name: 'me@acme', loginUrl: 'https://acme.my.salesforce.com', clientId: 'PlatformCLI', refreshToken: 'RT',
+    })
+    const view = store.listOrgs()
+    expect(view).toHaveLength(1)
+    expect(view[0]).toMatchObject({ id, name: 'me@acme', source: 'oauth', canConnect: true })
+    expect(store.getOrgRefreshToken(id)).toBe('RT')
+  })
+
+  it('never leaks the refresh token through getOrg', () => {
+    const id = store.saveOAuthOrg({ name: 'm', loginUrl: 'https://a', clientId: 'C', refreshToken: 'SECRET_RT' })
+    expect(store.getOrg(id)).not.toHaveProperty('refreshTokenEnc')
+    expect(JSON.stringify(store.getOrg(id))).not.toContain('SECRET_RT')
+  })
+
+  it('re-login to the same host reuses the record and replaces the refresh token', () => {
+    const id1 = store.saveOAuthOrg({ name: 'old', loginUrl: 'https://a', clientId: 'C', refreshToken: 'RT1' })
+    const id2 = store.saveOAuthOrg({ name: 'new', loginUrl: 'https://a', clientId: 'C', refreshToken: 'RT2' })
+    expect(id2).toBe(id1)
+    expect(store.listOrgs()).toHaveLength(1)
+    expect(store.listOrgs()[0].name).toBe('new')
+    expect(store.getOrgRefreshToken(id1)).toBe('RT2')
+  })
+
+  it('an oauth org with no refresh token cannot connect', () => {
+    // saveOAuthOrg always sets one; emulate a corrupted record on disk.
+    writeFileSync(FILE(), JSON.stringify({ orgs: [{ id: 'x', name: 'n', source: 'oauth', loginUrl: 'https://a' }] }))
+    expect(store.listOrgs()[0]).toMatchObject({ source: 'oauth', canConnect: false })
+  })
+})
+
 describe('tokens + active org', () => {
   it('round-trips encrypted tokens and reflects connected state', () => {
     const { id } = store.saveOrg({ name: 'P', clientId: 'K', loginUrl: 'https://p', clientSecret: 'S' })

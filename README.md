@@ -16,8 +16,11 @@ via Electron `safeStorage`.
 
 ### Prerequisites
 
-Install the [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli)
-(`sf`). Auth is handled through it - the app is a GUI over `sf org`.
+None required. The [Salesforce CLI](https://developer.salesforce.com/tools/salesforcecli)
+(`sf`) is **optional**: if installed, the app reuses its authenticated orgs and its
+`sf org login web` flow. If not, the app runs the same browser login itself (OAuth
+2.0 Authorization Code + PKCE against the public `PlatformCLI` connected app) - no
+CLI, no connected-app setup.
 
 ### 1. Run
 
@@ -28,17 +31,19 @@ npm run dev        # launches Vite + Electron with hot reload
 
 ### 2. Add an org
 
-- Orgs already authenticated in your CLI (`sf org login web`) appear in the org
+- If the `sf` CLI is installed, orgs already authenticated in it appear in the org
   dropdown automatically - nothing to configure.
 - To add a new one: **Orgs → Add org** → optional alias + login host (Production /
-  Sandbox / Custom My Domain) → **Open browser to log in**. This runs
-  `sf org login web`; complete the login in your browser and the org appears.
+  Sandbox / Custom My Domain) → **Open browser to log in**. Complete the login in
+  your browser and the org appears. With the CLI present this runs `sf org login web`;
+  without it the app runs the OAuth flow directly (tagged **Browser** in the org list).
 
-Pick an org from the dropdown and **Connect**. Switch between them anytime. The CLI
-handles token refresh; the app caches each org's session encrypted on disk.
+Pick an org from the dropdown and **Connect**. Switch between them anytime. The app
+caches each org's session encrypted on disk and refreshes tokens automatically - via
+the CLI for CLI orgs, via the stored refresh token for **Browser** orgs.
 
 > Legacy **Client Credentials** orgs (Consumer Key/Secret) remain connectable if you
-> have any saved, but new orgs are added via the CLI.
+> have any saved.
 
 ## Build
 
@@ -64,9 +69,10 @@ npm run test:watch # watch mode
 ```
 
 Vitest covers the pure logic (CSV build/parse, fuzzy matching, org-URL handling,
-CLI org-list parsing, job-info mapping, encrypted store, PATH recovery) in a node
-environment, plus jsdom + Testing Library component tests for `ConnectBar`,
-`LoadPanel`, `ExtractPanel`, and `MonitorPanel`.
+CLI org-list parsing, job-info mapping, encrypted store, PATH recovery, OAuth token
+grants, and the PKCE web-login loopback flow) in a node environment, plus jsdom +
+Testing Library component tests for `ConnectBar`, `LoadPanel`, `ExtractPanel`, and
+`MonitorPanel`.
 
 ## Operations notes
 
@@ -112,8 +118,9 @@ src/                React renderer (UI only, talks via window.api IPC bridge)
 electron/
   main.ts            BrowserWindow + IPC handlers + file dialogs
   preload.ts         contextBridge exposing the typed API
-  sfcli.ts           Salesforce CLI bridge: list / login / logout / token
-  oauth.ts           OAuth 2.0 Client Credentials token request (legacy orgs)
+  sfcli.ts           Salesforce CLI bridge: list / login / logout / token / availability
+  web-oauth.ts       CLI-free browser login: OAuth Authorization Code + PKCE, loopback
+  oauth.ts           OAuth token endpoint: client-credentials + refresh-token grants
   salesforce.ts      jsforce Bulk API 2.0: ingest, query, job monitor
   store.ts           encrypted per-org session + config persistence
 ```
