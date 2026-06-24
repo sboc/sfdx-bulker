@@ -29,6 +29,7 @@ const api: BulkerApi = {
   jobs: {
     status: (jobId) => invoke('jobs:status', jobId),
     abort: (jobId) => invoke('jobs:abort', jobId),
+    listAll: () => invoke('jobs:listAll'),
   },
   files: {
     openCsv: () => invoke('files:openCsv'),
