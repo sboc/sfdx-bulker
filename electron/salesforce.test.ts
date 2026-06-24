@@ -20,6 +20,7 @@ vi.mock('./store', () => ({
   getOrgSecret: vi.fn(),
   getOrgRefreshToken: vi.fn(),
   getOrgTokens: vi.fn(),
+  clearAllOrgTokens: vi.fn(),
   listOrgs: vi.fn(),
   saveOAuthOrg: vi.fn(),
   setActiveOrgId: vi.fn(),
@@ -205,6 +206,12 @@ describe('currentIdentity / disconnect / forgetCliSession', () => {
     sf.forgetCliSession('me@x')
     expect(store.setOrgTokens).toHaveBeenCalledWith('cli:me@x', null)
     expect(store.setActiveOrgId).not.toHaveBeenCalled()
+  })
+
+  it('disconnectAll clears every org token and the active pointer', () => {
+    sf.disconnectAll()
+    expect(store.clearAllOrgTokens).toHaveBeenCalled()
+    expect(store.setActiveOrgId).toHaveBeenCalledWith(null)
   })
 })
 

@@ -11,6 +11,7 @@ import {
   currentIdentity,
   describeObject,
   disconnect,
+  disconnectAll,
   forgetCliSession,
   ingestResults,
   jobStatus,
@@ -147,6 +148,11 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+// Clear all org sessions when the app quits; saved orgs + refresh tokens stay.
+app.on('before-quit', () => {
+  disconnectAll()
 })
 
 app.on('window-all-closed', () => {

@@ -6,6 +6,7 @@ import {
   getOrgRefreshToken,
   getOrgSecret,
   getOrgTokens,
+  clearAllOrgTokens,
   listOrgs,
   saveOAuthOrg,
   setActiveOrgId,
@@ -133,6 +134,12 @@ export function forgetCliSession(username: string): void {
 export function disconnect(): void {
   const id = getActiveOrgId()
   if (id) setOrgTokens(id, null)
+  setActiveOrgId(null)
+}
+
+/** Drop every org's session on app close; saved orgs + refresh tokens persist. */
+export function disconnectAll(): void {
+  clearAllOrgTokens()
   setActiveOrgId(null)
 }
 
