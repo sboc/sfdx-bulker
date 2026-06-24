@@ -105,6 +105,25 @@ export interface JobInfo {
 
 export type ResultKind = 'successful' | 'failed' | 'unprocessed'
 
+/** A remembered field mapping from a past load, reused on matching loads. */
+export interface LoadMapping {
+  object: string
+  operation: BulkOperation
+  /** CSV column set this mapping was built for (the match signature). */
+  columns: string[]
+  /** CSV column -> sObject field API name (empty/missing = ignored). */
+  mapping: Record<string, string>
+  /** Upsert external Id field, when applicable. */
+  externalIdField?: string
+  /** Id column for destructive ops, when applicable. */
+  idColumn?: string
+  /** ms since epoch, when this mapping was last used. */
+  updatedAt: number
+}
+
+/** What the renderer sends to remember a mapping (the store stamps updatedAt). */
+export type LoadMappingInput = Omit<LoadMapping, 'updatedAt'>
+
 export interface QueryJobRequest {
   soql: string
 }
@@ -154,5 +173,15 @@ export interface BulkerApi {
     /** Open one or more CSV files; null when the dialog is cancelled. */
     openCsv(): Promise<IpcResult<{ name: string; content: string }[] | null>>
     saveCsv(defaultName: string, content: string): Promise<IpcResult<{ path: string } | null>>
+  }
+  history: {
+    /** Remember the field mapping used for a load (scoped to the active org). */
+    saveLoadMapping(m: LoadMappingInput): Promise<IpcResult<null>>
+    /** Best remembered mapping matching object + operation + column set, or null. */
+    suggestMapping(q: {
+      object: string
+      operation: BulkOperation
+      columns: string[]
+    }): Promise<IpcResult<LoadMapping | null>>
   }
 }

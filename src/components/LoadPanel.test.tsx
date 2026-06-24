@@ -8,6 +8,7 @@ vi.mock('../api', () => ({
     metadata: { listObjects: vi.fn(), describeObject: vi.fn() },
     files: { openCsv: vi.fn(), saveCsv: vi.fn() },
     ingest: { submit: vi.fn(), results: vi.fn() },
+    history: { saveLoadMapping: vi.fn(), suggestMapping: vi.fn() },
   },
   unwrap: async <T,>(p: Promise<IpcResult<T>>) => {
     const r = await p
@@ -33,6 +34,8 @@ beforeEach(() => {
     ok: true,
     data: { id: '750a', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: 'd', isQuery: false },
   })
+  vi.mocked(api.history.suggestMapping).mockResolvedValue({ ok: true, data: null })
+  vi.mocked(api.history.saveLoadMapping).mockResolvedValue({ ok: true, data: null })
 })
 afterEach(cleanup)
 
@@ -254,5 +257,73 @@ describe('LoadPanel field mapping', () => {
     expect(await screen.findByText(/Duplicated: Name/)).toBeTruthy()
     expect((screen.getByRole('button', { name: /Run insert/ }) as HTMLButtonElement).disabled).toBe(true)
     expect(api.ingest.submit).not.toHaveBeenCalled()
+  })
+
+  it('remembers the mapping after a successful submit', async () => {
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Email__c', label: 'Email', type: 'email', createable: true, updateable: true, externalId: false },
+      ],
+    })
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: [{ name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' }],
+    })
+
+    render(<LoadPanel />)
+    fireEvent.change(await screen.findByPlaceholderText('Search 2 objects…'), { target: { value: 'Account' } })
+    await chooseFile(/c\.csv/)
+    goToStep2()
+    await screen.findByText('2 of 2 columns mapped')
+
+    fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
+    await waitFor(() =>
+      expect(api.history.saveLoadMapping).toHaveBeenCalledWith(
+        expect.objectContaining({
+          object: 'Account',
+          operation: 'insert',
+          columns: ['Name', 'Email'],
+          mapping: { Name: 'Name', Email: 'Email__c' },
+        }),
+      ),
+    )
+  })
+
+  it('offers a remembered mapping and applies it on Apply', async () => {
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Email__c', label: 'Email', type: 'email', createable: true, updateable: true, externalId: false },
+      ],
+    })
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: [{ name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' }],
+    })
+    // Remembered mapping ignores Email (differs from the auto-map).
+    vi.mocked(api.history.suggestMapping).mockResolvedValue({
+      ok: true,
+      data: {
+        object: 'Account', operation: 'insert', columns: ['Name', 'Email'],
+        mapping: { Name: 'Name', Email: '' }, updatedAt: 1,
+      },
+    })
+
+    render(<LoadPanel />)
+    fireEvent.change(await screen.findByPlaceholderText('Search 2 objects…'), { target: { value: 'Account' } })
+    await chooseFile(/c\.csv/)
+    goToStep2()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
+    await waitFor(() =>
+      expect(api.ingest.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ csv: 'Name\nAcme' }),
+      ),
+    )
   })
 })

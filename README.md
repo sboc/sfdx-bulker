@@ -92,6 +92,10 @@ Testing Library component tests for `ConnectBar`, `LoadPanel`, `ExtractPanel`,
   object's fields and auto-maps each CSV column (by API name or label). Adjust
   any mapping or set a column to *ignore*; the CSV is rewritten to field API
   names before upload. If fields can't be loaded, the CSV is sent as-is.
+- **Remembered mappings**: each successful load saves its mapping per org. When a
+  later load targets the same object + operation with the same CSV columns, the
+  Load tab offers the previous mapping (external Id / Id column included) with an
+  **Apply** button. The 50 most recent are kept (not secret, stored unencrypted).
 - **update** requires a column mapped to `Id`.
 - **delete / hardDelete** only need the record `Id`, so they skip field mapping -
   just pick which CSV column holds the Id (auto-selected if a column is named

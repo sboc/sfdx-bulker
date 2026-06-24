@@ -35,6 +35,10 @@ const api: BulkerApi = {
     openCsv: () => invoke('files:openCsv'),
     saveCsv: (defaultName, content) => invoke('files:saveCsv', defaultName, content),
   },
+  history: {
+    saveLoadMapping: (m) => invoke('history:saveLoadMapping', m),
+    suggestMapping: (q) => invoke('history:suggestMapping', q),
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

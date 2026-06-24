@@ -2,7 +2,7 @@ import { app, safeStorage } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
-import type { SavedOrg, SavedOrgView, SaveOrgInput } from '../src/shared/types'
+import type { LoadMapping, SavedOrg, SavedOrgView, SaveOrgInput } from '../src/shared/types'
 
 export interface StoredTokens {
   accessToken: string
@@ -20,11 +20,18 @@ interface PersistedOrg extends SavedOrg {
   refreshTokenEnc?: string
 }
 
+/** A remembered load mapping, stamped with the org it belongs to. */
+interface StoredLoadMapping extends LoadMapping {
+  organizationId: string
+}
+
 interface Persisted {
   orgs?: PersistedOrg[]
   activeOrgId?: string
   /** orgId -> base64 of safeStorage-encrypted StoredTokens JSON. */
   tokens?: Record<string, string>
+  /** Past load mappings (newest first), reused on matching loads. Not secret. */
+  loadMappings?: StoredLoadMapping[]
 }
 
 /** Legacy single-org schema (pre-multi-org). */
@@ -236,6 +243,52 @@ export function setOrgTokens(id: string, tokens: StoredTokens | null): void {
   if (tokens) data.tokens[id] = encrypt(JSON.stringify(tokens))
   else delete data.tokens[id]
   save(data)
+}
+
+// ---- Load mapping history ----
+
+/** How many remembered mappings to keep (across all orgs), newest first. */
+const MAX_LOAD_MAPPINGS = 50
+
+/** Match key: same object + operation + same column set (order-independent). */
+const mappingSig = (object: string, operation: string, columns: string[]) =>
+  `${object}\u0000${operation}\u0000${[...columns].sort().join('\u0001')}`
+
+/** Remember a mapping for an org, replacing any prior one with the same signature. */
+export function saveLoadMapping(organizationId: string, m: LoadMapping): void {
+  const data = load()
+  const key = mappingSig(m.object, m.operation, m.columns)
+  const rest = (data.loadMappings ?? []).filter(
+    (x) =>
+      !(x.organizationId === organizationId && mappingSig(x.object, x.operation, x.columns) === key),
+  )
+  rest.unshift({ ...m, organizationId })
+  data.loadMappings = rest.slice(0, MAX_LOAD_MAPPINGS)
+  save(data)
+}
+
+/** Most recent remembered mapping matching object + operation + column set, or null. */
+export function suggestLoadMapping(
+  organizationId: string,
+  object: string,
+  operation: string,
+  columns: string[],
+): LoadMapping | null {
+  const key = mappingSig(object, operation, columns)
+  const hit = (load().loadMappings ?? []).find(
+    (x) =>
+      x.organizationId === organizationId && mappingSig(x.object, x.operation, x.columns) === key,
+  )
+  if (!hit) return null
+  return {
+    object: hit.object,
+    operation: hit.operation,
+    columns: hit.columns,
+    mapping: hit.mapping,
+    externalIdField: hit.externalIdField,
+    idColumn: hit.idColumn,
+    updatedAt: hit.updatedAt,
+  }
 }
 
 /** Drop every org's cached session tokens (keeps saved orgs + refresh tokens). */
