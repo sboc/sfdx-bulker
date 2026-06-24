@@ -6,7 +6,7 @@ Desktop app (Electron + React) for running **Salesforce Bulk API 2.0** jobs agai
 |-----|--------------|
 | **Load** | `insert` · `update` · `upsert` · `delete` · `hardDelete` from a CSV file |
 | **Extract** | Run a SOQL query as a bulk query job, preview and save results to CSV |
-| **Monitor** | Track jobs submitted this session, poll each for live progress, view/save successful · failed · unprocessed records, abort |
+| **Monitor** | Track jobs submitted this session, poll each for live progress, view/save successful · failed · unprocessed records, abort, and fix & resubmit failed records |
 
 The Salesforce browser SDK can't call the Bulk API directly (CORS), so all API
 calls run in the Electron **main process**. Tokens are stored encrypted on disk
@@ -64,8 +64,9 @@ npm run test:watch # watch mode
 ```
 
 Vitest covers the pure logic (CSV build/parse, org-URL handling, CLI org-list
-parsing, job-info mapping) in a node environment, plus jsdom + Testing Library
-component tests for `ConnectBar` and `LoadPanel`.
+parsing, job-info mapping, encrypted store, PATH recovery) in a node
+environment, plus jsdom + Testing Library component tests for `ConnectBar`,
+`LoadPanel`, `ExtractPanel`, and `MonitorPanel`.
 
 ## Operations notes
 
@@ -73,7 +74,10 @@ component tests for `ConnectBar` and `LoadPanel`.
   object's fields and auto-maps each CSV column (by API name or label). Adjust
   any mapping or set a column to *ignore*; the CSV is rewritten to field API
   names before upload. If fields can't be loaded, the CSV is sent as-is.
-- **update / delete / hardDelete** require a column mapped to `Id`.
+- **update** requires a column mapped to `Id`.
+- **delete / hardDelete** only need the record `Id`, so they skip field mapping -
+  just pick which CSV column holds the Id (auto-selected if a column is named
+  `Id`) and a one-column CSV is submitted.
 - **upsert** requires an external Id field (chosen from the object's external-id
   fields) with a column mapped to it.
 - **hardDelete** permanently deletes records (bypasses the recycle bin) and
@@ -81,6 +85,11 @@ component tests for `ConnectBar` and `LoadPanel`.
 - Jobs are submitted asynchronously - each submitted job is added to the
   **Monitor** tab, which polls it for completion and lets you view and save the
   successful / failed / unprocessed records. The tracked list is per session.
+- **Fix & retry**: in a failed-results view, the Monitor groups the distinct
+  error messages and lets you select error groups, then resubmits just those
+  rows as a new job - replacing exact cell values (with a dropdown of the
+  column's errored values, or mapping a value to null), remapping a column to a
+  different field, or dropping a column. Upserts can pick the external Id key.
 
 ## Architecture
 
