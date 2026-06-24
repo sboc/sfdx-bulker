@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, unwrap } from '../api'
+import { SoqlEditor } from './SoqlEditor'
 
 export function ExtractPanel() {
   const [soql, setSoql] = useState('')
@@ -23,23 +24,30 @@ export function ExtractPanel() {
 
   async function save() {
     if (!result) return
-    await unwrap(api.files.saveCsv('extract.csv', result.csv))
+    try {
+      await unwrap(api.files.saveCsv('extract.csv', result.csv))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
-  const previewLines = result ? result.csv.split('\n').slice(0, 30) : []
-
   return (
-    <div className="panel">
+    <div className="panel extract">
       <div className="card">
         <h3>SOQL query</h3>
-        <textarea
-          className="soql"
+        <SoqlEditor
           value={soql}
-          spellCheck={false}
-          onChange={(e) => setSoql(e.target.value)}
+          onChange={setSoql}
+          onSubmit={() => {
+            if (!busy && soql.trim()) run()
+          }}
           placeholder="SELECT Id, Name FROM Object LIMIT 1000"
           rows={5}
         />
+        <p className="hint">
+          Autocomplete: objects after <code>FROM</code>, fields elsewhere. Ctrl/⌘+Space to trigger,
+          Ctrl/⌘+Enter to run.
+        </p>
         <div className="actions left">
           <button className="btn primary" onClick={run} disabled={busy || !soql.trim()}>
             {busy ? 'Running…' : 'Run query'}
@@ -55,13 +63,12 @@ export function ExtractPanel() {
       {error && <div className="banner error">{error}</div>}
 
       {result && (
-        <div className="card">
+        <div className="card results">
           <h3>{result.rows} rows</h3>
           {result.rows === 0 ? (
             <p className="hint">No records returned.</p>
           ) : (
-            <pre className="csv-preview">{previewLines.join('\n')}
-{result.csv.split('\n').length > 30 ? '\n…' : ''}</pre>
+            <pre className="csv-preview">{result.csv}</pre>
           )}
         </div>
       )}

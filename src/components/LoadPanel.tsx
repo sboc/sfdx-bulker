@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, unwrap } from '../api'
 import { combineCsvs, parseCsvPreview, remapCsv } from '../shared/csv'
+import { bestMatch, fuzzyThreshold } from '../shared/fuzzy'
+import { Combo } from './Combo'
 import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
@@ -38,7 +40,7 @@ export function LoadPanel({
   const [objectsError, setObjectsError] = useState<string | null>(null)
   const [operation, setOperation] = useState<BulkOperation>('insert')
   const [externalId, setExternalId] = useState('')
-  const [lineEnding] = useState<LineEnding>('LF')
+  const lineEnding: LineEnding = 'LF'
   const [file, setFile] = useState<{ name: string; content: string } | null>(null)
   // Files picked that couldn't be combined strictly - offer a shared-columns combine.
   const [mismatched, setMismatched] = useState<{ name: string; content: string }[] | null>(null)
@@ -50,6 +52,7 @@ export function LoadPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [job, setJob] = useState<JobInfo | null>(null)
+  const [step, setStep] = useState(1)
 
   const preview = useMemo(() => parseCsvPreview(file?.content), [file])
   const mapReady = fields.length > 0 && fieldsObject === object && !!preview
@@ -189,8 +192,23 @@ export function LoadPanel({
     }
   }
 
+  const canAdvance = !!file && !!object.trim() && !(operation === 'upsert' && !externalId.trim())
+  const stepTitle = destructive ? 'Record Id' : 'Field mapping'
+
   return (
     <div className="panel">
+      <ol className="wizard-steps">
+        <li className={step === 1 ? 'active' : 'done'} onClick={() => setStep(1)}>
+          <span className="step-no">1</span> Configure
+        </li>
+        <li className={step === 2 ? 'active' : canAdvance ? '' : 'disabled'}
+          onClick={() => canAdvance && setStep(2)}>
+          <span className="step-no">2</span> {stepTitle} &amp; run
+        </li>
+      </ol>
+
+      {step === 1 && (
+      <>
       <div className="grid">
         <div className="card">
           <h3>1. Operation</h3>
@@ -231,18 +249,16 @@ export function LoadPanel({
             <label>
               External Id field
               {externalIdFields.length > 0 ? (
-                <select
-                  aria-label="External Id field"
+                <Combo
+                  options={externalIdFields.map((f) => ({
+                    value: f.name,
+                    label: f.name,
+                    hint: f.label,
+                  }))}
                   value={externalId}
-                  onChange={(e) => setExternalId(e.target.value)}
-                >
-                  <option value="">Select a field…</option>
-                  {externalIdFields.map((f) => (
-                    <option key={f.name} value={f.name}>
-                      {f.label} ({f.name})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setExternalId}
+                  placeholder="Search external Id field…"
+                />
               ) : (
                 <input
                   value={externalId}
@@ -278,9 +294,21 @@ export function LoadPanel({
         </div>
       </div>
 
+      {error && !mismatched && <div className="banner error">{error}</div>}
+
+      <div className="actions">
+        <button className="btn primary" onClick={() => setStep(2)} disabled={!canAdvance}>
+          Next: {stepTitle} →
+        </button>
+      </div>
+      </>
+      )}
+
+      {step === 2 && (
+      <>
       {preview && (
         <div className="card">
-          <h3>4. {destructive ? 'Record Id' : 'Field mapping'}</h3>
+          <h3>{destructive ? 'Record Id' : 'Field mapping'}</h3>
           {destructive ? (
             <>
               <p className="hint">
@@ -289,14 +317,12 @@ export function LoadPanel({
               </p>
               <label>
                 Id column
-                <select value={idColumn} onChange={(e) => setIdColumn(e.target.value)}>
-                  <option value="">Select a column…</option>
-                  {preview.columns.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <Combo
+                  options={preview.columns.map((c) => ({ value: c, label: c }))}
+                  value={idColumn}
+                  onChange={setIdColumn}
+                  placeholder="Search column…"
+                />
               </label>
             </>
           ) : !objects.some((o) => o.name === object) ? (
@@ -326,24 +352,24 @@ export function LoadPanel({
                       {col}
                     </span>
                     <span className="map-arrow">→</span>
-                    <select
+                    <Combo
                       className={
                         mapping[col]
                           ? duplicateTargets.has(mapping[col])
-                            ? 'map-target dupe'
-                            : 'map-target'
-                          : 'map-target unmapped'
+                            ? 'dupe'
+                            : ''
+                          : 'unmapped'
                       }
+                      options={selectableFields.map((f) => ({
+                        value: f.name,
+                        label: f.name,
+                        hint: f.label,
+                      }))}
                       value={mapping[col] ?? ''}
-                      onChange={(e) => setMapping({ ...mapping, [col]: e.target.value })}
-                    >
-                      <option value="">— ignore —</option>
-                      {selectableFields.map((f) => (
-                        <option key={f.name} value={f.name}>
-                          {f.label} ({f.name})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setMapping({ ...mapping, [col]: v })}
+                      placeholder="Search field…"
+                      clearLabel="— ignore —"
+                    />
                   </div>
                 ))}
               </div>
@@ -366,7 +392,10 @@ export function LoadPanel({
         </div>
       )}
 
-      <div className="actions">
+      <div className="actions split">
+        <button className="btn ghost" onClick={() => setStep(1)} disabled={busy}>
+          ← Back
+        </button>
         <button
           className={destructive ? 'btn danger' : 'btn primary'}
           onClick={submit}
@@ -380,6 +409,8 @@ export function LoadPanel({
           {busy ? 'Submitting…' : `Run ${operation}`}
         </button>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -402,12 +433,14 @@ function ObjectSelect({
 
   const q = value.trim().toLowerCase()
   const matches = useMemo(() => {
-    const list = q
-      ? objects.filter(
-          (o) => o.name.toLowerCase().includes(q) || o.label.toLowerCase().includes(q),
-        )
-      : objects
-    return list.slice(0, 200)
+    if (!q) return objects.slice(0, 200)
+    const limit = fuzzyThreshold(q.length)
+    return objects
+      .map((o) => ({ o, score: bestMatch(q, o.name.toLowerCase(), o.label.toLowerCase()) }))
+      .filter((s) => s.score < 1000 || s.score - 1000 <= limit)
+      .sort((a, b) => a.score - b.score || a.o.name.localeCompare(b.o.name))
+      .slice(0, 200)
+      .map((s) => s.o)
   }, [objects, q])
 
   useEffect(() => {

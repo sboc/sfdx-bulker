@@ -1,5 +1,9 @@
 // Pure CSV helpers shared by the renderer (preview) and main process (export).
 
+/** Strip a leading UTF-8 BOM (common in Excel-saved CSVs) so it doesn't leak
+ * into the first column name and break header matching. */
+const stripBom = (s: string) => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s)
+
 /** Split one CSV line into fields, honouring quoted fields and escaped quotes. */
 export function splitCsvLine(line: string): string[] {
   const out: string[] = []
@@ -26,7 +30,7 @@ export function splitCsvLine(line: string): string[] {
 /** Header columns + row count for a CSV string, or null if empty. */
 export function parseCsvPreview(content?: string): { rows: number; columns: string[] } | null {
   if (!content) return null
-  const lines = content.split(/\r\n|\n/).filter((l) => l.length > 0)
+  const lines = stripBom(content).split(/\r\n|\n/).filter((l) => l.length > 0)
   if (lines.length === 0) return null
   return { rows: Math.max(0, lines.length - 1), columns: splitCsvLine(lines[0]) }
 }
@@ -49,6 +53,7 @@ export function combineCsvs(
     splitCsvLine(content.split(/\r\n|\n/).find((l) => l.length > 0) ?? '').map((c) => c.trim())
   const key = (cols: string[]) => JSON.stringify(cols)
 
+  files = files.map((f) => ({ ...f, content: stripBom(f.content) }))
   const usable = files.filter((f) => f.content.split(/\r\n|\n/).some((l) => l.length > 0))
   if (usable.length === 0) throw new Error('No rows found in the selected files.')
 
@@ -92,7 +97,7 @@ export function parseCsvTable(
   content: string,
   maxRows = 200,
 ): { columns: string[]; rows: string[][]; total: number } {
-  const lines = content.split(/\r\n|\n/).filter((l) => l.length > 0)
+  const lines = stripBom(content).split(/\r\n|\n/).filter((l) => l.length > 0)
   if (lines.length === 0) return { columns: [], rows: [], total: 0 }
   const columns = splitCsvLine(lines[0])
   const dataLines = lines.slice(1)
@@ -130,7 +135,7 @@ export function recordsToCsv(records: Record<string, unknown>[]): string {
  * Output column order follows the kept source columns.
  */
 export function remapCsv(content: string, targets: string[]): string {
-  const lines = content.split(/\r\n|\n/).filter((l) => l.length > 0)
+  const lines = stripBom(content).split(/\r\n|\n/).filter((l) => l.length > 0)
   if (lines.length === 0) return ''
   const keep = targets.map((t, i) => ({ t: t.trim(), i })).filter((k) => k.t)
   if (keep.length === 0) return ''

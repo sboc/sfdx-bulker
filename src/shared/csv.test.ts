@@ -45,6 +45,10 @@ describe('parseCsvPreview', () => {
   it('parses a header with quoted commas', () => {
     expect(parseCsvPreview('"Last, First",Age')?.columns).toEqual(['Last, First', 'Age'])
   })
+
+  it('strips a leading UTF-8 BOM from the first column', () => {
+    expect(parseCsvPreview('﻿Id,Name\n1,Acme')?.columns).toEqual(['Id', 'Name'])
+  })
 })
 
 describe('recordsToCsv', () => {
