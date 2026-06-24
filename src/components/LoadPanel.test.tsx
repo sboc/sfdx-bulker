@@ -92,6 +92,26 @@ describe('LoadPanel submit', () => {
     expect(api.ingest.submit).not.toHaveBeenCalled()
   })
 
+  it('populates the upsert external-Id dropdown from the object, before any file', async () => {
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+        { name: 'Ext__c', label: 'Ext Key', type: 'string', createable: true, updateable: true, externalId: true },
+      ],
+    })
+    render(<LoadPanel />)
+    const obj = await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.change(obj, { target: { value: 'Account' } })
+    fireEvent.click(screen.getAllByRole('radio')[2]) // upsert
+
+    // External Id field is a dropdown (not a text input) listing externalId/Id fields
+    const select = (await screen.findByRole('combobox', {
+      name: 'External Id field',
+    })) as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toContain('Ext__c')
+  })
+
   it('surfaces a submit error', async () => {
     vi.mocked(api.ingest.submit).mockResolvedValue({ ok: false, error: 'bulk boom' })
     render(<LoadPanel />)

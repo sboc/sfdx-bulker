@@ -60,9 +60,10 @@ export function LoadPanel({
     })
   }, [])
 
-  // Describe the chosen object + auto-map its fields to the CSV columns.
+  // Describe the chosen object (so the field/external-Id dropdowns populate even
+  // before a file is picked); auto-map to the CSV columns once a file is present.
   useEffect(() => {
-    if (!preview || !objects.some((o) => o.name === object)) return
+    if (!objects.some((o) => o.name === object)) return
     let cancelled = false
     const t = setTimeout(() => {
       setFieldsError(null)
@@ -72,7 +73,7 @@ export function LoadPanel({
           const f = r.data ?? []
           setFields(f)
           setFieldsObject(object)
-          setMapping(autoMap(preview.columns, f))
+          if (preview) setMapping(autoMap(preview.columns, f))
         } else {
           setFieldsError(r.error ?? 'Failed to load fields')
         }
@@ -210,7 +211,11 @@ export function LoadPanel({
             <label>
               External Id field
               {externalIdFields.length > 0 ? (
-                <select value={externalId} onChange={(e) => setExternalId(e.target.value)}>
+                <select
+                  aria-label="External Id field"
+                  value={externalId}
+                  onChange={(e) => setExternalId(e.target.value)}
+                >
                   <option value="">Select a field…</option>
                   {externalIdFields.map((f) => (
                     <option key={f.name} value={f.name}>
