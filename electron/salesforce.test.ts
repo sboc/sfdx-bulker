@@ -11,14 +11,17 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('jsforce', () => ({ default: { Connection: vi.fn(() => h.conn) } }))
-vi.mock('./oauth', () => ({ requestClientCredentialsToken: vi.fn() }))
+vi.mock('./oauth', () => ({ requestClientCredentialsToken: vi.fn(), requestRefreshToken: vi.fn() }))
 vi.mock('./sfcli', () => ({ getCliOrgAuth: vi.fn(), listCliOrgs: vi.fn() }))
+vi.mock('./web-oauth', () => ({ runWebLogin: vi.fn(), OAUTH_CLIENT_ID: 'PlatformCLI' }))
 vi.mock('./store', () => ({
   getActiveOrgId: vi.fn(),
   getOrg: vi.fn(),
   getOrgSecret: vi.fn(),
+  getOrgRefreshToken: vi.fn(),
   getOrgTokens: vi.fn(),
   listOrgs: vi.fn(),
+  saveOAuthOrg: vi.fn(),
   setActiveOrgId: vi.fn(),
   setOrgTokens: vi.fn(),
 }))
@@ -26,7 +29,8 @@ vi.mock('./store', () => ({
 import * as sf from './salesforce'
 import * as store from './store'
 import * as sfcli from './sfcli'
-import { requestClientCredentialsToken } from './oauth'
+import { requestClientCredentialsToken, requestRefreshToken } from './oauth'
+import { runWebLogin } from './web-oauth'
 
 const TOKENS: StoredTokens = {
   accessToken: 'TOK',
@@ -106,6 +110,66 @@ describe('connect', () => {
     })
     vi.mocked(store.getOrgSecret).mockReturnValue(null)
     await expect(sf.connect('o1')).rejects.toThrow(/no consumer secret/i)
+  })
+})
+
+describe('loginWeb (CLI-free browser OAuth)', () => {
+  it('runs the web flow, persists the org with its refresh token, and activates it', async () => {
+    vi.mocked(runWebLogin).mockResolvedValue({
+      access_token: 'TOK', instance_url: 'https://i.example.com', token_type: 'Bearer', refresh_token: 'RT',
+    })
+    vi.mocked(store.saveOAuthOrg).mockReturnValue('oauth-1')
+    fetchMock.mockResolvedValue(resp(IDENTITY))
+
+    const identity = await sf.loginWeb({ alias: 'prod', instanceUrl: 'https://login.salesforce.com' })
+
+    expect(runWebLogin).toHaveBeenCalledWith({ instanceUrl: 'https://login.salesforce.com' })
+    // Org is keyed by the real instance URL (not the login host) so refresh hits the right endpoint.
+    expect(store.saveOAuthOrg).toHaveBeenCalledWith({
+      name: 'prod', loginUrl: 'https://i.example.com', clientId: 'PlatformCLI', refreshToken: 'RT',
+    })
+    expect(store.setOrgTokens).toHaveBeenCalledWith('oauth-1', expect.objectContaining({ accessToken: 'TOK' }))
+    expect(store.setActiveOrgId).toHaveBeenCalledWith('oauth-1')
+    expect(identity.username).toBe('me@x')
+  })
+
+  it('falls back to the identity username when no alias is given', async () => {
+    vi.mocked(runWebLogin).mockResolvedValue({
+      access_token: 'TOK', instance_url: 'https://i.example.com', token_type: 'Bearer', refresh_token: 'RT',
+    })
+    vi.mocked(store.saveOAuthOrg).mockReturnValue('oauth-1')
+    fetchMock.mockResolvedValue(resp(IDENTITY))
+    await sf.loginWeb({ instanceUrl: 'https://login.salesforce.com' })
+    expect(store.saveOAuthOrg).toHaveBeenCalledWith(expect.objectContaining({ name: 'me@x' }))
+  })
+})
+
+describe('acquireToken: oauth org', () => {
+  it('refreshes via the refresh_token grant on a 401 and retries', async () => {
+    makeActive()
+    vi.mocked(store.getOrg).mockReturnValue({
+      id: 'o1', name: 'Acme', source: 'oauth', loginUrl: 'https://i.example.com', clientId: 'PlatformCLI',
+    })
+    vi.mocked(store.getOrgRefreshToken).mockReturnValue('RT')
+    vi.mocked(requestRefreshToken).mockResolvedValue({
+      access_token: 'TOK2', instance_url: 'https://i.example.com', token_type: 'Bearer',
+    })
+    fetchMock
+      .mockResolvedValueOnce(resp({}, { ok: false, status: 401 }))
+      .mockResolvedValueOnce(resp({ id: '750a', object: 'A', operation: 'insert', state: 'JobComplete', createdDate: 'd' }))
+
+    const info = await sf.jobStatus('750a')
+    expect(info.id).toBe('750a')
+    expect(requestRefreshToken).toHaveBeenCalledWith('https://i.example.com', 'PlatformCLI', 'RT')
+    expect(store.setOrgTokens).toHaveBeenCalledWith('o1', expect.objectContaining({ accessToken: 'TOK2' }))
+  })
+
+  it('throws when the oauth org has no stored refresh token', async () => {
+    vi.mocked(store.getOrg).mockReturnValue({
+      id: 'o1', name: 'Acme', source: 'oauth', loginUrl: 'https://i', clientId: 'PlatformCLI',
+    })
+    vi.mocked(store.getOrgRefreshToken).mockReturnValue(null)
+    await expect(sf.connect('o1')).rejects.toThrow(/no stored refresh token/i)
   })
 })
 

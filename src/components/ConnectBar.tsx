@@ -151,7 +151,7 @@ function OrgsModal({ onClose }: { onClose: () => void }) {
 
   if (adding) {
     return (
-      <CliLoginForm
+      <LoginForm
         onCancel={() => setAdding(false)}
         onDone={async () => {
           setAdding(false)
@@ -180,7 +180,9 @@ function OrgsModal({ onClose }: { onClose: () => void }) {
                 </span>
               </div>
               <div className="org-row-actions">
-                <span className="src-tag">{o.source === 'cli' ? 'CLI' : 'Client Creds'}</span>
+                <span className="src-tag">
+                  {o.source === 'cli' ? 'CLI' : o.source === 'oauth' ? 'Browser' : 'Client Creds'}
+                </span>
                 {o.source === 'cli' ? (
                   <button className="link danger" disabled={busyId === o.id} onClick={() => logout(o)}>
                     {busyId === o.id ? 'Logging out…' : 'Log out'}
@@ -207,12 +209,24 @@ function OrgsModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function CliLoginForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
+function LoginForm({ onCancel, onDone }: { onCancel: () => void; onDone: () => void }) {
   const [alias, setAlias] = useState('')
   const [mode, setMode] = useState<LoginMode>('production')
   const [customDomain, setCustomDomain] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // null = still detecting. Decides whether to log in via the CLI or directly in-app.
+  const [hasCli, setHasCli] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void api.auth.cliAvailable().then((r) => {
+      if (live) setHasCli(r.ok ? !!r.data : false)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
 
   const instanceUrl = resolveLoginUrl(mode, customDomain)
 
@@ -220,7 +234,9 @@ function CliLoginForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =
     setError(null)
     setBusy(true)
     try {
-      await unwrap(api.auth.loginCli({ alias: alias.trim() || undefined, instanceUrl }))
+      const opts = { alias: alias.trim() || undefined, instanceUrl }
+      if (hasCli) await unwrap(api.auth.loginCli(opts))
+      else await unwrap(api.auth.loginWeb(opts))
       onDone()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -233,8 +249,14 @@ function CliLoginForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Add org</h2>
         <p className="hint">
-          Logs in through the <code>sf</code> CLI - this opens your browser to the Salesforce login.
-          Complete it there and the org appears here.
+          {hasCli ? (
+            <>
+              Logs in through the <code>sf</code> CLI - this opens your browser to the Salesforce
+              login. Complete it there and the org appears here.
+            </>
+          ) : (
+            <>Opens your browser to sign in to Salesforce - no Salesforce CLI required.</>
+          )}
         </p>
         <label>
           Alias (optional)
@@ -265,7 +287,11 @@ function CliLoginForm({ onCancel, onDone }: { onCancel: () => void; onDone: () =
           <button className="btn ghost" onClick={onCancel} disabled={busy}>
             Cancel
           </button>
-          <button className="btn primary" onClick={login} disabled={busy || !instanceUrl}>
+          <button
+            className="btn primary"
+            onClick={login}
+            disabled={busy || !instanceUrl || hasCli === null}
+          >
             {busy ? 'Waiting…' : 'Open browser to log in'}
           </button>
         </div>

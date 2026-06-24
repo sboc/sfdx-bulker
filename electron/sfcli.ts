@@ -28,6 +28,16 @@ async function resolveBin(): Promise<string> {
   throw new Error(NOT_FOUND)
 }
 
+/** True if an `sf`/`sfdx` binary is available. Used by the UI to pick a login path. */
+export async function cliAvailable(): Promise<boolean> {
+  try {
+    await resolveBin()
+    return true
+  } catch {
+    return false
+  }
+}
+
 interface CliEnvelope<T> {
   status: number
   result: T

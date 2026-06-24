@@ -14,8 +14,10 @@ export interface StoredTokens {
 }
 
 interface PersistedOrg extends SavedOrg {
-  /** Base64 of safeStorage-encrypted Consumer Secret. */
+  /** Base64 of safeStorage-encrypted Consumer Secret (client-credentials orgs). */
   secretEnc?: string
+  /** Base64 of safeStorage-encrypted OAuth refresh token (oauth orgs). */
+  refreshTokenEnc?: string
 }
 
 interface Persisted {
@@ -107,7 +109,8 @@ export function listOrgs(): SavedOrgView[] {
     cliUsername: o.cliUsername,
     loginUrl: o.loginUrl,
     hasSecret: !!o.secretEnc,
-    canConnect: o.source === 'cli' ? true : !!o.secretEnc,
+    canConnect:
+      o.source === 'cli' ? true : o.source === 'oauth' ? !!o.refreshTokenEnc : !!o.secretEnc,
     connected: data.activeOrgId === o.id && !!data.tokens?.[o.id],
   }))
 }
@@ -130,6 +133,37 @@ export function getOrg(id: string): SavedOrg | null {
 export function getOrgSecret(id: string): string | null {
   const enc = load().orgs?.find((x) => x.id === id)?.secretEnc
   return enc ? decrypt(enc) : null
+}
+
+export function getOrgRefreshToken(id: string): string | null {
+  const enc = load().orgs?.find((x) => x.id === id)?.refreshTokenEnc
+  return enc ? decrypt(enc) : null
+}
+
+/** Create (or update by login URL) an oauth org from a completed web login. Returns its id. */
+export function saveOAuthOrg(input: {
+  name: string
+  loginUrl: string
+  clientId: string
+  refreshToken: string
+}): string {
+  const data = load()
+  data.orgs ??= []
+  // Re-login to the same host reuses the existing org record (refreshes its token).
+  const existing = data.orgs.find((o) => o.source === 'oauth' && o.loginUrl === input.loginUrl)
+  const org: PersistedOrg = existing ?? {
+    id: randomUUID(),
+    name: input.name,
+    source: 'oauth',
+    clientId: input.clientId,
+    loginUrl: input.loginUrl,
+  }
+  org.name = input.name
+  org.clientId = input.clientId
+  org.refreshTokenEnc = encrypt(input.refreshToken)
+  if (!existing) data.orgs.push(org)
+  save(data)
+  return org.id
 }
 
 function toSavedOrg(o: PersistedOrg): SavedOrg {

@@ -10,7 +10,9 @@ const api: BulkerApi = {
     connect: (id) => invoke('auth:connect', id),
     disconnect: () => invoke('auth:disconnect'),
     current: () => invoke('auth:current'),
+    cliAvailable: () => invoke('auth:cliAvailable'),
     loginCli: (opts) => invoke('auth:loginCli', opts),
+    loginWeb: (opts) => invoke('auth:loginWeb', opts),
     logoutCli: (username) => invoke('auth:logoutCli', username),
   },
   metadata: {
