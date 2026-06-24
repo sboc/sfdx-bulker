@@ -44,12 +44,14 @@ export function LoadPanel({
   const [fieldsObject, setFieldsObject] = useState('')
   const [fieldsError, setFieldsError] = useState<string | null>(null)
   const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [idColumn, setIdColumn] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [job, setJob] = useState<JobInfo | null>(null)
 
   const preview = useMemo(() => parseCsvPreview(file?.content), [file])
   const mapReady = fields.length > 0 && fieldsObject === object && !!preview
+  const destructive = operation === 'delete' || operation === 'hardDelete'
 
   useEffect(() => {
     api.metadata.listObjects().then((r) => {
@@ -107,6 +109,9 @@ export function LoadPanel({
       setFile(f)
       setJob(null)
       setError(null)
+      // Delete only needs the record Id - auto-pick the column that looks like it.
+      const cols = parseCsvPreview(f.content)?.columns ?? []
+      setIdColumn(cols.find((c) => norm(c) === 'id') ?? '')
     }
   }
 
@@ -119,7 +124,11 @@ export function LoadPanel({
       return setError('Upsert requires an external Id field.')
 
     let csv = file.content
-    if (mapReady) {
+    if (destructive) {
+      if (!idColumn) return setError('Choose which column holds the record Id.')
+      const targets = preview.columns.map((c) => (c === idColumn ? 'Id' : ''))
+      csv = remapCsv(file.content, targets)
+    } else if (mapReady) {
       const targets = preview.columns.map((c) => mapping[c] || '')
       if (!targets.some(Boolean)) return setError('Map at least one column to a field.')
       if (duplicateTargets.size > 0)
@@ -150,8 +159,6 @@ export function LoadPanel({
       setBusy(false)
     }
   }
-
-  const destructive = operation === 'delete' || operation === 'hardDelete'
 
   return (
     <div className="panel">
@@ -237,8 +244,26 @@ export function LoadPanel({
 
       {preview && (
         <div className="card">
-          <h3>4. Field mapping</h3>
-          {!objects.some((o) => o.name === object) ? (
+          <h3>4. {destructive ? 'Record Id' : 'Field mapping'}</h3>
+          {destructive ? (
+            <>
+              <p className="hint">
+                {operation} only needs the record Id. Pick the column that holds it - other columns
+                are ignored.
+              </p>
+              <label>
+                Id column
+                <select value={idColumn} onChange={(e) => setIdColumn(e.target.value)}>
+                  <option value="">Select a column…</option>
+                  {preview.columns.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : !objects.some((o) => o.name === object) ? (
             <p className="hint">Choose a target sObject above to map columns to its fields.</p>
           ) : fieldsError ? (
             <p className="hint">
@@ -309,7 +334,12 @@ export function LoadPanel({
         <button
           className={destructive ? 'btn danger' : 'btn primary'}
           onClick={submit}
-          disabled={busy || !file || !object.trim() || duplicateTargets.size > 0}
+          disabled={
+            busy ||
+            !file ||
+            !object.trim() ||
+            (destructive ? !idColumn : duplicateTargets.size > 0)
+          }
         >
           {busy ? 'Submitting…' : `Run ${operation}`}
         </button>
