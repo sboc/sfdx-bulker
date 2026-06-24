@@ -6,6 +6,9 @@ import type { JobInfo } from '../shared/types'
 
 const ACTIVE = new Set(['Open', 'UploadComplete', 'InProgress'])
 
+// Page-size choices for the jobs pager; first is the default.
+const PAGE_SIZES = [10, 25, 50, 100]
+
 // Canonical Bulk API 2.0 job states, in lifecycle order.
 const STATES = ['Open', 'UploadComplete', 'InProgress', 'JobComplete', 'Aborted', 'Failed']
 
@@ -27,6 +30,8 @@ interface Props {
 export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMonitor }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pageSize, setPageSize] = useState(PAGE_SIZES[0])
+  const [page, setPage] = useState(1)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -50,7 +55,10 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
 
   const list = useMemo(() => jobs ?? [], [jobs])
   const { object, state, operation, from, to } = filters
-  const set = (patch: Partial<JobFilters>) => onFilters({ ...filters, ...patch })
+  const set = (patch: Partial<JobFilters>) => {
+    setPage(1)
+    onFilters({ ...filters, ...patch })
+  }
 
   // Objects actually present in the loaded jobs, sorted, for the searchable picker.
   const objectOptions = useMemo<ComboOption[]>(() => {
@@ -84,6 +92,14 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
   }, [list, object, state, operation, from, to])
 
   const active = !!(object || state || operation || from || to)
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  // Clamp the current page when the result set or page size shrinks under it.
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
+  const start = (page - 1) * pageSize
+  const pageJobs = filtered.slice(start, start + pageSize)
 
   function monitor(job: JobInfo) {
     onTrack(job)
@@ -139,7 +155,13 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
           <input type="date" aria-label="Created to" value={to} min={from || undefined} onChange={(e) => set({ to: e.target.value })} />
         </label>
         {active && (
-          <button className="link" onClick={() => onFilters(EMPTY_JOB_FILTERS)}>
+          <button
+            className="link"
+            onClick={() => {
+              setPage(1)
+              onFilters(EMPTY_JOB_FILTERS)
+            }}
+          >
             Clear
           </button>
         )}
@@ -166,10 +188,49 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
             {list.length === 0 ? 'No bulk jobs in this org.' : 'No jobs match the filter.'}
           </div>
         )}
-        {filtered.map((j) => (
+        {pageJobs.map((j) => (
           <JobRow key={j.id} job={j} onAbort={refresh} onMonitor={() => monitor(j)} />
         ))}
       </div>
+
+      {filtered.length > 0 && (
+        <div className="pager">
+          <div className="pager-nav">
+            <button
+              className="btn ghost"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </button>
+            <span className="hint">
+              Page {page} of {pageCount}
+            </span>
+            <button
+              className="btn ghost"
+              disabled={page >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              Next →
+            </button>
+          </div>
+          <select
+            className="job-filter-state job-page-size"
+            aria-label="Jobs per page"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(1)
+            }}
+          >
+            {PAGE_SIZES.map((n) => (
+              <option key={n} value={n}>
+                {n} / page
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   )
 }
