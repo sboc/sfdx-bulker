@@ -26,7 +26,8 @@ export function ConnectBar({ org, onChange }: Props) {
   }, [refresh])
 
   const connected = orgs.find((o) => o.connected) ?? null
-  const activeSelectId = selectedId || connected?.id || orgs[0]?.id || ''
+  // No first-org fallback - force an explicit pick (placeholder) until the user chooses.
+  const activeSelectId = selectedId || connected?.id || ''
   const selected = orgs.find((o) => o.id === activeSelectId) ?? null
 
   async function connect() {
@@ -57,9 +58,13 @@ export function ConnectBar({ org, onChange }: Props) {
       {orgs.length > 0 && (
         <select
           className="org-select"
+          aria-label="Org"
           value={activeSelectId}
           onChange={(e) => setSelectedId(e.target.value)}
         >
+          <option value="" disabled hidden>
+            Select an org…
+          </option>
           {orgs.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}

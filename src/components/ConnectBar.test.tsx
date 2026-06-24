@@ -38,6 +38,8 @@ const cc = (over: Partial<SavedOrgView> = {}): SavedOrgView => ({
   hasSecret: true, canConnect: true, connected: false, ...over,
 })
 const orgsOk = (data: SavedOrgView[]) => m.listConnectable.mockResolvedValue({ ok: true, data })
+const selectOrg = async (id: string) =>
+  fireEvent.change(await screen.findByRole('combobox', { name: 'Org' }), { target: { value: id } })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -55,9 +57,18 @@ describe('connect / disconnect', () => {
   it('connects the selected org and reports the identity up', async () => {
     const onChange = vi.fn()
     render(<ConnectBar org={null} onChange={onChange} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+    await selectOrg('cli:p@x')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     await waitFor(() => expect(m.connect).toHaveBeenCalledWith('cli:p@x'))
     expect(onChange).toHaveBeenCalledWith(IDENTITY)
+  })
+
+  it('forces an explicit org pick - Connect is disabled until one is selected', async () => {
+    render(<ConnectBar org={null} onChange={() => {}} />)
+    const btn = (await screen.findByRole('button', { name: 'Connect' })) as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+    await selectOrg('cli:p@x')
+    expect((screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('disconnects when the active org is connected', async () => {
@@ -72,6 +83,7 @@ describe('connect / disconnect', () => {
   it('disables Connect for an org that cannot connect', async () => {
     orgsOk([cc({ hasSecret: false, canConnect: false })])
     render(<ConnectBar org={null} onChange={() => {}} />)
+    await selectOrg('o1')
     const btn = (await screen.findByRole('button', { name: 'Connect' })) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
   })
@@ -79,7 +91,8 @@ describe('connect / disconnect', () => {
   it('surfaces a connect error', async () => {
     m.connect.mockResolvedValue({ ok: false, error: 'auth boom' })
     render(<ConnectBar org={null} onChange={() => {}} />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+    await selectOrg('cli:p@x')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     expect(await screen.findByText('auth boom')).toBeTruthy()
   })
 })
