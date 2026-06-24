@@ -14,6 +14,7 @@ import {
   forgetCliSession,
   ingestResults,
   jobStatus,
+  listAllJobs,
   listConnectableOrgs,
   listObjects,
   loginWeb,
@@ -115,6 +116,7 @@ function registerIpc(): void {
     await abortJob(jobId as string)
     return null
   })
+  handle('jobs:listAll', () => listAllJobs())
 
   // files
   handle('files:openCsv', async () => {

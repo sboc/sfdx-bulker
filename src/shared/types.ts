@@ -147,6 +147,8 @@ export interface BulkerApi {
   jobs: {
     status(jobId: string): Promise<IpcResult<JobInfo>>
     abort(jobId: string): Promise<IpcResult<null>>
+    /** Every bulk job in the org (ingest + query), all pages, newest first. */
+    listAll(): Promise<IpcResult<JobInfo[]>>
   }
   files: {
     /** Open one or more CSV files; null when the dialog is cancelled. */

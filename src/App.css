@@ -683,7 +683,7 @@ textarea:focus {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   margin-bottom: 14px;
 }
 .toggle {
@@ -695,10 +695,59 @@ textarea:focus {
 .toolbar-sep {
   flex: 1;
 }
+.toolbar .btn,
+.toolbar .hint {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.toolbar .hint {
+  margin: 0;
+}
+/* Uniform control height so the filter row aligns on a single baseline. */
+.toolbar input,
+.toolbar select,
+.toolbar .combo input {
+  height: 32px;
+  box-sizing: border-box;
+}
 .filter {
   padding: 6px 10px;
   font-size: 13px;
   max-width: 200px;
+}
+
+/* Jobs tab filters - kept compact so the row fits on one line */
+.job-filter-object {
+  width: 150px;
+  flex: 0 0 auto;
+}
+.job-filter-object input,
+.job-filter-state {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.job-filter-state {
+  max-width: 140px;
+}
+.job-filter-date {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.job-filter-date input {
+  padding: 5px 6px;
+  font-size: 12px;
+  width: 124px;
+}
+.job-count {
+  margin-left: 4px;
+}
+/* Jobs table has no Failed column and no Processed column -> 6 columns. */
+.jobs-table .tr {
+  grid-template-columns: 1.6fr 1.4fr 0.9fr 1fr 1.3fr 1.2fr;
 }
 
 /* Job table */

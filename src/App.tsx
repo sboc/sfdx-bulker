@@ -5,13 +5,16 @@ import { ConnectBar } from './components/ConnectBar'
 import { LoadPanel } from './components/LoadPanel'
 import { ExtractPanel } from './components/ExtractPanel'
 import { MonitorPanel } from './components/MonitorPanel'
+import { JobsPanel } from './components/JobsPanel'
+import { EMPTY_JOB_FILTERS, type JobFilters } from './components/jobFilters'
 import './App.css'
 
-type Tab = 'load' | 'extract' | 'monitor'
+type Tab = 'load' | 'extract' | 'jobs' | 'monitor'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'load', label: 'Load' },
   { id: 'extract', label: 'Extract' },
+  { id: 'jobs', label: 'Jobs' },
   { id: 'monitor', label: 'Monitor' },
 ]
 
@@ -19,12 +22,22 @@ function App() {
   const [org, setOrg] = useState<OrgIdentity | null>(null)
   const [tab, setTab] = useState<Tab>('load')
   const [trackedJobs, setTrackedJobs] = useState<JobInfo[]>([])
+  // Jobs-tab cache + filters, lifted here so they survive tab switches. null = never loaded.
+  const [orgJobs, setOrgJobs] = useState<JobInfo[] | null>(null)
+  const [jobFilters, setJobFilters] = useState<JobFilters>(EMPTY_JOB_FILTERS)
   const [ready, setReady] = useState(false)
 
   // Track a job submitted this session, newest first, deduped by id.
   const trackJob = (job: JobInfo) =>
     setTrackedJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)])
   const dismissJob = (id: string) => setTrackedJobs((prev) => prev.filter((j) => j.id !== id))
+
+  // Switching orgs invalidates the cached org-jobs list (it is org-specific).
+  const changeOrg = (o: OrgIdentity | null) => {
+    setOrg(o)
+    setOrgJobs(null)
+    setJobFilters(EMPTY_JOB_FILTERS)
+  }
 
   useEffect(() => {
     api.auth.current().then((o) => {
@@ -45,7 +58,7 @@ function App() {
             <p>Salesforce Bulk API 2.0</p>
           </div>
         </div>
-        <ConnectBar org={org} onChange={setOrg} />
+        <ConnectBar org={org} onChange={changeOrg} />
       </header>
 
       {org ? (
@@ -72,6 +85,16 @@ function App() {
               />
             )}
             {tab === 'extract' && <ExtractPanel />}
+            {tab === 'jobs' && (
+              <JobsPanel
+                jobs={orgJobs}
+                onJobs={setOrgJobs}
+                filters={jobFilters}
+                onFilters={setJobFilters}
+                onTrack={trackJob}
+                onViewMonitor={() => setTab('monitor')}
+              />
+            )}
             {tab === 'monitor' && (
               <MonitorPanel jobs={trackedJobs} onTrack={trackJob} onDismiss={dismissJob} />
             )}

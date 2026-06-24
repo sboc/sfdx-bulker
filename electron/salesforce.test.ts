@@ -374,6 +374,49 @@ describe('job monitor', () => {
 
 })
 
+describe('listAllJobs', () => {
+  it('pages through ingest + query jobs, flags query rows, sorts newest first', async () => {
+    makeActive()
+    fetchMock.mockImplementation(async (url: URL) => {
+      const u = String(url)
+      // ingest: two pages (nextRecordsUrl then done)
+      if (u.endsWith('/jobs/ingest'))
+        return resp({
+          done: false,
+          nextRecordsUrl: '/services/data/v62.0/jobs/ingest?locator=B',
+          records: [{ id: 'i1', object: 'Account', operation: 'insert', state: 'JobComplete', createdDate: '2026-01-02' }],
+        })
+      if (u.includes('/jobs/ingest?locator=B'))
+        return resp({
+          done: true,
+          records: [{ id: 'i2', object: 'Contact', operation: 'update', state: 'InProgress', createdDate: '2026-01-04' }],
+        })
+      // query: single page
+      if (u.endsWith('/jobs/query'))
+        return resp({
+          done: true,
+          records: [{ id: 'q1', object: 'Lead', operation: 'query', state: 'JobComplete', createdDate: '2026-01-03' }],
+        })
+      return resp({}, { ok: false, status: 404 })
+    })
+
+    const jobs = await sf.listAllJobs()
+
+    // newest first: i2 (01-04) > q1 (01-03) > i1 (01-02)
+    expect(jobs.map((j) => j.id)).toEqual(['i2', 'q1', 'i1'])
+    expect(jobs.find((j) => j.id === 'q1')).toMatchObject({ isQuery: true })
+    expect(jobs.find((j) => j.id === 'i1')).toMatchObject({ isQuery: false })
+    // ingest fetched twice (paginated) + query once
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('throws when a job list request fails', async () => {
+    makeActive()
+    fetchMock.mockResolvedValue(resp({}, { ok: false, status: 500 }))
+    await expect(sf.listAllJobs()).rejects.toThrow(/Failed to list .* jobs \(500\)/)
+  })
+})
+
 describe('apiFetch auth retry', () => {
   it('refreshes the token once on 401 and retries', async () => {
     makeActive()

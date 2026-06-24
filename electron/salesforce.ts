@@ -330,6 +330,30 @@ export async function jobStatus(jobId: string): Promise<JobInfo> {
   throw new Error(`Job ${jobId} not found (${resp.status})`)
 }
 
+/** Page through one job type (ingest or query), mapping each record to JobInfo. */
+async function listJobsOfType(kind: 'ingest' | 'query'): Promise<JobInfo[]> {
+  const out: JobInfo[] = []
+  let path: string | null = `/services/data/v${API_VERSION}/jobs/${kind}`
+  while (path) {
+    const resp = await apiFetch(path)
+    if (!resp.ok) throw new Error(`Failed to list ${kind} jobs (${resp.status})`)
+    const page = (await resp.json()) as {
+      records?: RawJobInfo[]
+      nextRecordsUrl?: string
+      done?: boolean
+    }
+    for (const r of page.records ?? []) out.push(toJobInfo(r, kind === 'query'))
+    path = page.done ? null : (page.nextRecordsUrl ?? null)
+  }
+  return out
+}
+
+/** Every bulk job in the org (ingest + query), all pages, newest first. */
+export async function listAllJobs(): Promise<JobInfo[]> {
+  const [ingest, query] = await Promise.all([listJobsOfType('ingest'), listJobsOfType('query')])
+  return [...ingest, ...query].sort((a, b) => b.createdDate.localeCompare(a.createdDate))
+}
+
 async function patchJobState(jobId: string, state: 'Aborted', isQuery: boolean): Promise<void> {
   const base = isQuery ? 'query' : 'ingest'
   const resp = await apiFetch(`/services/data/v${API_VERSION}/jobs/${base}/${jobId}`, {
