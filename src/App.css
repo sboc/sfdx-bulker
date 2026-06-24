@@ -745,6 +745,33 @@ textarea:focus {
 .job-count {
   margin-left: 4px;
 }
+/* Pager below the jobs table: nav centered, page-size pinned bottom-right. */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 14px;
+  position: relative;
+}
+.pager-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pager-nav .hint {
+  margin: 0;
+  line-height: 32px;
+}
+.job-page-size {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 32px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 13px;
+}
 /* Jobs table has no Failed column and no Processed column -> 6 columns. */
 .jobs-table .tr {
   grid-template-columns: 1.6fr 1.4fr 0.9fr 1fr 1.3fr 1.2fr;

@@ -151,4 +151,61 @@ describe('JobsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
     await waitFor(() => expect(api.jobs.listAll).toHaveBeenCalledTimes(1))
   })
+
+  // 25 jobs id'd p01..p25, newest first like the real (date-desc) list.
+  // p01 is the lone InProgress job so a state filter can shrink the list.
+  const MANY: JobInfo[] = Array.from({ length: 25 }, (_, i) =>
+    job({ id: `p${String(i + 1).padStart(2, '0')}`, state: i === 0 ? 'InProgress' : 'JobComplete' }),
+  )
+
+  it('paginates to 10 rows per page by default', () => {
+    render(<Harness initialJobs={MANY} />)
+    expect(screen.getAllByText(/^p\d\d$/).length).toBe(10)
+    expect(screen.getByText('p01')).toBeTruthy()
+    expect(screen.getByText('p10')).toBeTruthy()
+    expect(screen.queryByText('p11')).toBeNull()
+    expect(screen.getByText('Page 1 of 3')).toBeTruthy()
+  })
+
+  it('Prev is disabled on the first page', () => {
+    render(<Harness initialJobs={MANY} />)
+    expect(screen.getByRole('button', { name: /Prev/ }).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: /Next/ }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('Next advances to the following page', () => {
+    render(<Harness initialJobs={MANY} />)
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(screen.getByText('p11')).toBeTruthy()
+    expect(screen.getByText('p20')).toBeTruthy()
+    expect(screen.queryByText('p10')).toBeNull()
+    expect(screen.getByText('Page 2 of 3')).toBeTruthy()
+  })
+
+  it('Next is disabled on the last (partial) page', () => {
+    render(<Harness initialJobs={MANY} />)
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(screen.getByText('Page 3 of 3')).toBeTruthy()
+    expect(screen.getAllByText(/^p\d\d$/).length).toBe(5) // p21..p25
+    expect(screen.getByRole('button', { name: /Next/ }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('changing page size resets to page 1 and resizes the page', () => {
+    render(<Harness initialJobs={MANY} />)
+    fireEvent.click(screen.getByRole('button', { name: /Next/ })) // off page 1
+    fireEvent.change(screen.getByLabelText('Jobs per page'), { target: { value: '50' } })
+    expect(screen.getAllByText(/^p\d\d$/).length).toBe(25) // all on one page
+    expect(screen.getByText('Page 1 of 1')).toBeTruthy()
+  })
+
+  it('clamps the page back when a filter shrinks the list', () => {
+    render(<Harness initialJobs={MANY} />)
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+    expect(screen.getByText('Page 2 of 3')).toBeTruthy()
+    // Filtering to the single InProgress job collapses to one page; page snaps to 1.
+    fireEvent.change(screen.getByLabelText('Filter by state'), { target: { value: 'InProgress' } })
+    expect(screen.getByText('Page 1 of 1')).toBeTruthy()
+    expect(screen.getByText('p01')).toBeTruthy()
+  })
 })

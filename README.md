@@ -6,7 +6,7 @@ Desktop app (Electron + React) for running **Salesforce Bulk API 2.0** jobs agai
 |-----|--------------|
 | **Load** | `insert` · `update` · `upsert` · `delete` · `hardDelete` from a CSV file |
 | **Extract** | Write a SOQL query (with object/field autocomplete) and run it as a bulk query job, preview and save results to CSV |
-| **Jobs** | List **every** ingest + query job in the org (all pages), filter by object, operation, state, and created-date range, then send any job to the Monitor or abort it |
+| **Jobs** | List **every** ingest + query job in the org (all pages), filter by object, operation, state, and created-date range, page through results, then send any job to the Monitor or abort it |
 | **Monitor** | Track jobs submitted this session, poll each for live progress, view/save successful · failed · unprocessed records, abort, and fix & resubmit failed records |
 
 The Salesforce browser SDK can't call the Bulk API directly (CORS), so all API
@@ -105,7 +105,8 @@ Testing Library component tests for `ConnectBar`, `LoadPanel`, `ExtractPanel`,
   "Get all jobs" endpoints (following pagination across all pages), newest first.
   Filter by object (searchable picker), operation, state, and a created-date
   range; **Monitor** sends a job to the Monitor tab for live status, **Abort**
-  cancels an active one. The list + filters are cached, so leaving and returning
+  cancels an active one. Results are paged (10 / 25 / 50 / 100 per page) with a
+  prev/next pager. The list + filters are cached, so leaving and returning
   to the tab keeps state; **Refresh** reloads on demand, and switching org clears
   the cache.
 - **Fix & retry**: in a failed-results view, the Monitor groups the distinct
