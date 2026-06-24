@@ -123,6 +123,55 @@ describe('MonitorPanel', () => {
     expect(onTrack).toHaveBeenCalledWith(expect.objectContaining({ id: '750retry' }))
   })
 
+  it('replaces a value even when the cell has surrounding whitespace', async () => {
+    vi.mocked(api.ingest.results).mockResolvedValue({
+      ok: true,
+      data: 'sf__Id,sf__Error,Status\n,INVALID picklist Activ, Activ ',
+    })
+    vi.mocked(api.ingest.submit).mockResolvedValue({ ok: true, data: job({ id: '750w' }) })
+    render(<MonitorPanel jobs={[job()]} onTrack={() => {}} onDismiss={() => {}} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '✗ 2' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /INVALID picklist/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix & retry 1 record' }))
+
+    fireEvent.click(screen.getAllByRole('button', { name: '+ add rule' })[0])
+    fireEvent.change(screen.getByRole('combobox', { name: 'replace column' }), {
+      target: { value: 'Status' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('find value'), { target: { value: 'Activ' } })
+    fireEvent.change(screen.getByPlaceholderText('replace with'), { target: { value: 'Active' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Retry 1 record' }))
+
+    await waitFor(() =>
+      expect(api.ingest.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ csv: 'Status\nActive' }),
+      ),
+    )
+  })
+
+  it('matches the offending value even when the error HTML-encodes it', async () => {
+    vi.mocked(api.ingest.results).mockResolvedValue({
+      ok: true,
+      // error encodes the apostrophe (&#39;); the cell holds the real char
+      data: "sf__Id,sf__Error,Country\n,bad value for restricted picklist field: &#39;-:Code --,'-",
+    })
+    render(<MonitorPanel jobs={[job()]} onTrack={() => {}} onDismiss={() => {}} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: '✗ 2' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /bad value/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix & retry 1 record' }))
+
+    fireEvent.click(screen.getAllByRole('button', { name: '+ add rule' })[0])
+    fireEvent.change(screen.getByRole('combobox', { name: 'replace column' }), {
+      target: { value: 'Country' },
+    })
+    const datalistValues = [...document.querySelectorAll('datalist option')].map((o) =>
+      o.getAttribute('value'),
+    )
+    expect(datalistValues).toContain("'-")
+  })
+
   it('retries an upsert with a chosen external Id key, dropping a column and nulling a value', async () => {
     vi.mocked(api.ingest.results).mockResolvedValue({
       ok: true,

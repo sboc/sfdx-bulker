@@ -410,6 +410,19 @@ interface RemapRule {
 const NULL_TOKEN = '#N/A'
 const DROP_COLUMN = '__drop__'
 
+// Salesforce HTML-encodes special chars in error text (e.g. ' -> &#39;); decode so
+// the offending value can be matched against the raw cell value.
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
 function RetryEditor({
   viewing,
   parsed,
@@ -446,7 +459,7 @@ function RetryEditor({
       const set = new Set<string>()
       for (const row of matchedRows) {
         const v = (row[ci] ?? '').trim()
-        if (v && (row[parsed.errCol] ?? '').includes(v)) set.add(v)
+        if (v && decodeHtmlEntities(row[parsed.errCol] ?? '').includes(v)) set.add(v)
       }
       m.set(c, Array.from(set).sort())
     }
@@ -502,7 +515,8 @@ function RetryEditor({
       const cells = srcIdx.map((ci, k) => {
         let v = row[ci] ?? ''
         for (const rule of replaceRules) {
-          if (rule.column === outCols[k] && rule.find && v === rule.find)
+          // find-values come from trimmed cell values, so match on the trimmed cell.
+          if (rule.column === outCols[k] && rule.find && v.trim() === rule.find)
             v = rule.toNull ? NULL_TOKEN : rule.replace
         }
         return escapeCsvValue(v)
