@@ -326,4 +326,34 @@ describe('LoadPanel field mapping', () => {
       ),
     )
   })
+
+  it('applies a remembered Id column for a destructive op', async () => {
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: [{ name: 'c.csv', content: 'Ref,Extra\n1,2' }],
+    })
+    // Remembered mapping for delete: the Id lives in the "Ref" column.
+    vi.mocked(api.history.suggestMapping).mockResolvedValue({
+      ok: true,
+      data: {
+        object: 'Account', operation: 'delete', columns: ['Ref', 'Extra'],
+        mapping: {}, idColumn: 'Ref', updatedAt: 1,
+      },
+    })
+
+    render(<LoadPanel />)
+    fireEvent.change(await screen.findByPlaceholderText('Search 2 objects…'), { target: { value: 'Account' } })
+    await chooseFile(/c\.csv/)
+    fireEvent.click(screen.getAllByRole('radio')[3]) // Delete
+    goToStep2()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Apply' }))
+
+    fireEvent.click(screen.getByRole('button', { name: /Run delete/ }))
+    await waitFor(() =>
+      expect(api.ingest.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'delete', csv: 'Id\n1' }),
+      ),
+    )
+  })
 })
