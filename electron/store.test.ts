@@ -117,6 +117,20 @@ describe('tokens + active org', () => {
     expect(store.getOrgTokens(id)).toBeNull()
     expect(store.getActiveOrgId()).toBeNull()
   })
+
+  it('clearAllOrgTokens drops every org session but keeps the saved orgs', () => {
+    const a = store.saveOrg({ name: 'A', clientId: 'K', loginUrl: 'https://a' })
+    const b = store.saveOrg({ name: 'B', clientId: 'K', loginUrl: 'https://b' })
+    const tk = { accessToken: 't', instanceUrl: 'i', username: 'u', displayName: 'U', organizationId: 'o', userId: 'x' }
+    store.setOrgTokens(a.id, tk)
+    store.setOrgTokens(b.id, tk)
+
+    store.clearAllOrgTokens()
+
+    expect(store.getOrgTokens(a.id)).toBeNull()
+    expect(store.getOrgTokens(b.id)).toBeNull()
+    expect(store.listOrgs().map((o) => o.id).sort()).toEqual([a.id, b.id].sort())
+  })
 })
 
 describe('deleteOrg', () => {

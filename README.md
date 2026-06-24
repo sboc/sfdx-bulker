@@ -41,7 +41,9 @@ npm run dev        # launches Vite + Electron with hot reload
 
 Pick an org from the dropdown and **Connect**. Switch between them anytime. The app
 caches each org's session encrypted on disk and refreshes tokens automatically - via
-the CLI for CLI orgs, via the stored refresh token for **Browser** orgs.
+the CLI for CLI orgs, via the stored refresh token for **Browser** orgs. On quit the
+app clears every org's cached session; saved orgs and their refresh tokens persist,
+so the next launch reconnects without re-adding them.
 
 > Legacy **Client Credentials** orgs (Consumer Key/Secret) remain connectable if you
 > have any saved.

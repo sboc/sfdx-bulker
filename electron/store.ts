@@ -237,3 +237,11 @@ export function setOrgTokens(id: string, tokens: StoredTokens | null): void {
   else delete data.tokens[id]
   save(data)
 }
+
+/** Drop every org's cached session tokens (keeps saved orgs + refresh tokens). */
+export function clearAllOrgTokens(): void {
+  const data = load()
+  if (!data.tokens) return
+  data.tokens = {}
+  save(data)
+}
