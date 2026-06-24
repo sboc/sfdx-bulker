@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { recordsToCsv, parseCsvPreview, splitCsvLine, remapCsv, parseCsvTable } from './csv'
+import {
+  recordsToCsv,
+  parseCsvPreview,
+  splitCsvLine,
+  remapCsv,
+  parseCsvTable,
+  combineCsvs,
+} from './csv'
 
 describe('splitCsvLine', () => {
   it('splits simple fields', () => {
@@ -108,5 +115,66 @@ describe('parseCsvTable', () => {
 
   it('handles empty content', () => {
     expect(parseCsvTable('')).toEqual({ columns: [], rows: [], total: 0 })
+  })
+})
+
+describe('combineCsvs', () => {
+  it('concatenates rows under a single header when headers match', () => {
+    const r = combineCsvs([
+      { name: 'a.csv', content: 'Id,Name\n1,Acme\n2,Globex' },
+      { name: 'b.csv', content: 'Id,Name\n3,Initech' },
+    ])
+    expect(r.content).toBe('Id,Name\n1,Acme\n2,Globex\n3,Initech')
+    expect(r.columns).toEqual(['Id', 'Name'])
+    expect(r.rows).toBe(3)
+  })
+
+  it('ignores header whitespace/quoting differences and CRLF', () => {
+    const r = combineCsvs([
+      { name: 'a.csv', content: 'Id, Name\r\n1,Acme' },
+      { name: 'b.csv', content: '"Id","Name"\n2,Globex' },
+    ])
+    expect(r.content).toBe('Id, Name\n1,Acme\n2,Globex')
+    expect(r.rows).toBe(2)
+  })
+
+  it('throws naming the file whose columns differ', () => {
+    expect(() =>
+      combineCsvs([
+        { name: 'a.csv', content: 'Id,Name\n1,Acme' },
+        { name: 'b.csv', content: 'Id,Email\n2,x@y.com' },
+      ]),
+    ).toThrow(/"b\.csv" has different columns/)
+  })
+
+  it('skips empty files and errors when nothing is usable', () => {
+    expect(() => combineCsvs([{ name: 'a.csv', content: '\n\n' }])).toThrow(/No rows found/)
+  })
+
+  it("mode 'shared' keeps only the columns common to every file", () => {
+    const r = combineCsvs(
+      [
+        { name: 'a.csv', content: 'Id,Name,Extra\n1,Acme,x' },
+        { name: 'b.csv', content: 'Name,Id\nGlobex,2' },
+      ],
+      'shared',
+    )
+    // shared = Id,Name in the first file's order; Extra (only in a) is dropped,
+    // and b's columns are realigned to that order
+    expect(r.columns).toEqual(['Id', 'Name'])
+    expect(r.content).toBe('Id,Name\n1,Acme\n2,Globex')
+    expect(r.rows).toBe(2)
+  })
+
+  it("mode 'shared' throws when there are no common columns", () => {
+    expect(() =>
+      combineCsvs(
+        [
+          { name: 'a.csv', content: 'Id\n1' },
+          { name: 'b.csv', content: 'Name\nAcme' },
+        ],
+        'shared',
+      ),
+    ).toThrow(/share no columns/)
   })
 })

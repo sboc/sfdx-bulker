@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, unwrap } from '../api'
-import { parseCsvPreview, remapCsv } from '../shared/csv'
+import { combineCsvs, parseCsvPreview, remapCsv } from '../shared/csv'
 import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
@@ -40,6 +40,8 @@ export function LoadPanel({
   const [externalId, setExternalId] = useState('')
   const [lineEnding] = useState<LineEnding>('LF')
   const [file, setFile] = useState<{ name: string; content: string } | null>(null)
+  // Files picked that couldn't be combined strictly - offer a shared-columns combine.
+  const [mismatched, setMismatched] = useState<{ name: string; content: string }[] | null>(null)
   const [fields, setFields] = useState<SObjectField[]>([])
   const [fieldsObject, setFieldsObject] = useState('')
   const [fieldsError, setFieldsError] = useState<string | null>(null)
@@ -104,15 +106,41 @@ export function LoadPanel({
     return new Set([...counts].filter(([, n]) => n > 1).map(([t]) => t))
   }, [preview, mapping])
 
+  function applyFile(chosen: { name: string; content: string }) {
+    setFile(chosen)
+    // Delete only needs the record Id - auto-pick the column that looks like it.
+    const cols = parseCsvPreview(chosen.content)?.columns ?? []
+    setIdColumn(cols.find((c) => norm(c) === 'id') ?? '')
+  }
+
   async function pickFile() {
-    const f = await unwrap(api.files.openCsv())
-    if (f) {
-      setFile(f)
-      setJob(null)
+    const picked = await unwrap(api.files.openCsv())
+    if (!picked || picked.length === 0) return
+    setJob(null)
+    setError(null)
+    setMismatched(null)
+    if (picked.length === 1) return applyFile(picked[0])
+    try {
+      // Multiple files are combined into one CSV; requires matching headers.
+      const { content, rows } = combineCsvs(picked)
+      applyFile({ name: `${picked.length} files combined (${rows} rows)`, content })
+    } catch (e) {
+      // Headers differ - keep the files so the user can opt into a shared-columns combine.
+      setFile(null)
+      setMismatched(picked)
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  function combineShared() {
+    if (!mismatched) return
+    try {
+      const { content, rows } = combineCsvs(mismatched, 'shared')
+      applyFile({ name: `${mismatched.length} files combined, shared columns (${rows} rows)`, content })
+      setMismatched(null)
       setError(null)
-      // Delete only needs the record Id - auto-pick the column that looks like it.
-      const cols = parseCsvPreview(f.content)?.columns ?? []
-      setIdColumn(cols.find((c) => norm(c) === 'id') ?? '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -186,10 +214,10 @@ export function LoadPanel({
           <h3>2. Target</h3>
           <label>
             sObject
-            <input
-              list="sobject-list"
+            <ObjectSelect
+              objects={objects}
               value={object}
-              onChange={(e) => setObject(e.target.value)}
+              onChange={setObject}
               placeholder={
                 objectsError
                   ? 'Type an API name…'
@@ -197,15 +225,7 @@ export function LoadPanel({
                     ? `Search ${objects.length} objects…`
                     : 'Loading objects…'
               }
-              autoComplete="off"
             />
-            <datalist id="sobject-list">
-              {objects.map((o) => (
-                <option key={o.name} value={o.name}>
-                  {o.label}
-                </option>
-              ))}
-            </datalist>
           </label>
           {operation === 'upsert' && (
             <label>
@@ -235,8 +255,19 @@ export function LoadPanel({
 
           <h3 style={{ marginTop: 20 }}>3. Data</h3>
           <button className="btn ghost full" onClick={pickFile}>
-            {file ? `📄 ${file.name}` : 'Choose CSV file…'}
+            {file ? `📄 ${file.name}` : 'Choose CSV file(s)…'}
           </button>
+          {!file && !mismatched && (
+            <p className="hint">Select multiple files to combine them - headers must match.</p>
+          )}
+          {mismatched && (
+            <div className="banner error">
+              {error}
+              <button className="link" onClick={combineShared}>
+                Combine shared columns only
+              </button>
+            </div>
+          )}
           {preview && (
             <div className="preview">
               <div className="preview-meta">
@@ -321,7 +352,7 @@ export function LoadPanel({
         </div>
       )}
 
-      {error && <div className="banner error">{error}</div>}
+      {error && !mismatched && <div className="banner error">{error}</div>}
       {job && (
         <div className="banner success">
           <span>
@@ -349,6 +380,97 @@ export function LoadPanel({
           {busy ? 'Submitting…' : `Run ${operation}`}
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Searchable, scrollable sObject picker (replaces the native datalist). */
+function ObjectSelect({
+  objects,
+  value,
+  onChange,
+  placeholder,
+}: {
+  objects: SObjectInfo[]
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const q = value.trim().toLowerCase()
+  const matches = useMemo(() => {
+    const list = q
+      ? objects.filter(
+          (o) => o.name.toLowerCase().includes(q) || o.label.toLowerCase().includes(q),
+        )
+      : objects
+    return list.slice(0, 200)
+  }, [objects, q])
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
+
+  function choose(name: string) {
+    onChange(name)
+    setOpen(false)
+  }
+
+  return (
+    <div className="combo" ref={wrapRef}>
+      <input
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+          setActive(0)
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setOpen(true)
+            setActive((a) => Math.min(a + 1, matches.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActive((a) => Math.max(a - 1, 0))
+          } else if (e.key === 'Enter' && open && matches[active]) {
+            e.preventDefault()
+            choose(matches[active].name)
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+      />
+      {open && matches.length > 0 && (
+        <ul className="combo-list" role="listbox">
+          {matches.map((o, i) => (
+            <li
+              key={o.name}
+              role="option"
+              aria-selected={i === active}
+              className={i === active ? 'active' : ''}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                choose(o.name)
+              }}
+            >
+              <span className="combo-name">{o.name}</span>
+              <span className="combo-label">{o.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

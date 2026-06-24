@@ -28,7 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.metadata.listObjects).mockResolvedValue({ ok: true, data: OBJECTS })
   vi.mocked(api.metadata.describeObject).mockResolvedValue({ ok: true, data: [] })
-  vi.mocked(api.files.openCsv).mockResolvedValue({ ok: true, data: { name: 'data.csv', content: 'Id\n1\n2' } })
+  vi.mocked(api.files.openCsv).mockResolvedValue({ ok: true, data: [{ name: 'data.csv', content: 'Id\n1\n2' }] })
   vi.mocked(api.ingest.submit).mockResolvedValue({
     ok: true,
     data: { id: '750a', object: 'Account', operation: 'insert', state: 'UploadComplete', createdDate: 'd', isQuery: false },
@@ -50,6 +50,17 @@ describe('LoadPanel render', () => {
     }
   })
 
+  it('filters the sObject dropdown and selects an option on click', async () => {
+    render(<LoadPanel />)
+    const obj = await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.change(obj, { target: { value: 'Cont' } })
+    // only matching object listed
+    const options = screen.getAllByRole('option')
+    expect(options).toHaveLength(1)
+    fireEvent.mouseDown(screen.getByRole('option', { name: /Contact/ }))
+    expect((obj as HTMLInputElement).value).toBe('Contact')
+  })
+
   it('disables Run until an sObject and file are chosen', async () => {
     render(<LoadPanel />)
     await screen.findByPlaceholderText('Search 2 objects…')
@@ -61,6 +72,55 @@ describe('LoadPanel render', () => {
     await screen.findByPlaceholderText('Search 2 objects…')
     await chooseFile()
     expect(screen.getByText('2')).toBeTruthy() // 2 rows
+  })
+})
+
+describe('LoadPanel multi-file', () => {
+  it('combines multiple matching files into one CSV', async () => {
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'a.csv', content: 'Id\n1\n2' },
+        { name: 'b.csv', content: 'Id\n3' },
+      ],
+    })
+    render(<LoadPanel />)
+    await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.click(screen.getByRole('button', { name: /Choose CSV file/ }))
+    expect(await screen.findByText(/2 files combined \(3 rows\)/)).toBeTruthy()
+    expect(screen.getByText('3')).toBeTruthy() // 3 combined rows in the preview
+  })
+
+  it('offers a shared-columns combine when headers differ', async () => {
+    vi.mocked(api.files.openCsv).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'a.csv', content: 'Id,Name,Extra\n1,Acme,x' },
+        { name: 'b.csv', content: 'Id,Name\n2,Globex' },
+      ],
+    })
+    vi.mocked(api.metadata.describeObject).mockResolvedValue({
+      ok: true,
+      data: [
+        { name: 'Id', label: 'Id', type: 'id', createable: false, updateable: false, externalId: false },
+        { name: 'Name', label: 'Name', type: 'string', createable: true, updateable: true, externalId: false },
+      ],
+    })
+    render(<LoadPanel />)
+    const obj = await screen.findByPlaceholderText('Search 2 objects…')
+    fireEvent.change(obj, { target: { value: 'Account' } })
+    fireEvent.click(screen.getByRole('button', { name: /Choose CSV file/ }))
+
+    expect(await screen.findByText(/has different columns/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Combine shared columns only' }))
+
+    expect(await screen.findByText(/shared columns \(2 rows\)/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Run insert/ }))
+    await waitFor(() =>
+      expect(api.ingest.submit).toHaveBeenCalledWith(
+        expect.objectContaining({ csv: 'Id,Name\n1,Acme\n2,Globex' }),
+      ),
+    )
   })
 })
 
@@ -134,7 +194,7 @@ describe('LoadPanel field mapping', () => {
     })
     vi.mocked(api.files.openCsv).mockResolvedValue({
       ok: true,
-      data: { name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' },
+      data: [{ name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' }],
     })
 
     render(<LoadPanel />)
@@ -163,7 +223,7 @@ describe('LoadPanel field mapping', () => {
     })
     vi.mocked(api.files.openCsv).mockResolvedValue({
       ok: true,
-      data: { name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' },
+      data: [{ name: 'c.csv', content: 'Name,Email\nAcme,a@x.com' }],
     })
 
     const { container } = render(<LoadPanel />)

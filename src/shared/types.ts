@@ -145,7 +145,8 @@ export interface BulkerApi {
     abort(jobId: string): Promise<IpcResult<null>>
   }
   files: {
-    openCsv(): Promise<IpcResult<{ name: string; content: string } | null>>
+    /** Open one or more CSV files; null when the dialog is cancelled. */
+    openCsv(): Promise<IpcResult<{ name: string; content: string }[] | null>>
     saveCsv(defaultName: string, content: string): Promise<IpcResult<{ path: string } | null>>
   }
 }

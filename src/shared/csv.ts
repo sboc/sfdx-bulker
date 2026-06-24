@@ -31,6 +31,62 @@ export function parseCsvPreview(content?: string): { rows: number; columns: stri
   return { rows: Math.max(0, lines.length - 1), columns: splitCsvLine(lines[0]) }
 }
 
+/**
+ * Combine several CSVs into one. By default (mode 'strict') headers must be
+ * identical (same columns, same order - ignoring surrounding whitespace and
+ * quoting), and an Error names the first file whose columns differ. With mode
+ * 'shared' the result keeps only the columns present in every file (intersection,
+ * in the first file's order) and rewrites each file's rows to them. Empty files
+ * are skipped; throws if nothing is usable or 'shared' finds no common columns.
+ */
+export function combineCsvs(
+  files: { name: string; content: string }[],
+  mode: 'strict' | 'shared' = 'strict',
+): { content: string; columns: string[]; rows: number } {
+  const dataLinesOf = (content: string) =>
+    content.split(/\r\n|\n/).filter((l) => l.length > 0).slice(1)
+  const headerOf = (content: string) =>
+    splitCsvLine(content.split(/\r\n|\n/).find((l) => l.length > 0) ?? '').map((c) => c.trim())
+  const key = (cols: string[]) => JSON.stringify(cols)
+
+  const usable = files.filter((f) => f.content.split(/\r\n|\n/).some((l) => l.length > 0))
+  if (usable.length === 0) throw new Error('No rows found in the selected files.')
+
+  const base = usable[0]
+  const baseCols = headerOf(base.content)
+
+  if (mode === 'shared') {
+    const others = usable.map((f) => headerOf(f.content))
+    const shared = baseCols.filter((c) => others.every((cols) => cols.includes(c)))
+    if (shared.length === 0) throw new Error('The selected files share no columns to combine.')
+    const out = [shared.map(escapeCsvValue).join(',')]
+    let rows = 0
+    for (const f of usable) {
+      const cols = headerOf(f.content)
+      const idx = shared.map((c) => cols.indexOf(c))
+      for (const line of dataLinesOf(f.content)) {
+        const cells = splitCsvLine(line)
+        out.push(idx.map((i) => escapeCsvValue(cells[i] ?? '')).join(','))
+        rows++
+      }
+    }
+    return { content: out.join('\n'), columns: shared, rows }
+  }
+
+  for (const f of usable.slice(1)) {
+    if (key(headerOf(f.content)) !== key(baseCols)) {
+      throw new Error(
+        `"${f.name}" has different columns (${headerOf(f.content).join(', ')}) than ` +
+          `"${base.name}" (${baseCols.join(', ')}). Files must share the same header to combine.`,
+      )
+    }
+  }
+
+  const dataLines = usable.flatMap((f) => dataLinesOf(f.content))
+  const headerLine = base.content.split(/\r\n|\n/).find((l) => l.length > 0) ?? ''
+  return { content: [headerLine, ...dataLines].join('\n'), columns: baseCols, rows: dataLines.length }
+}
+
 /** Parse a CSV into header columns + data rows (capped), for previewing results. */
 export function parseCsvTable(
   content: string,

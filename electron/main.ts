@@ -116,12 +116,11 @@ function registerIpc(): void {
   // files
   handle('files:openCsv', async () => {
     const r = await dialog.showOpenDialog({
-      properties: ['openFile'],
+      properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'CSV', extensions: ['csv'] }],
     })
     if (r.canceled || r.filePaths.length === 0) return null
-    const path = r.filePaths[0]
-    return { name: basename(path), content: readFileSync(path, 'utf8') }
+    return r.filePaths.map((path) => ({ name: basename(path), content: readFileSync(path, 'utf8') }))
   })
   handle('files:saveCsv', async (defaultName, content) => {
     const r = await dialog.showSaveDialog({
