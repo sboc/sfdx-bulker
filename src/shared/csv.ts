@@ -63,7 +63,7 @@ export function recordsToCsv(records: Record<string, unknown>[]): string {
       return set
     }, new Set<string>()),
   )
-  const lines = [keys.join(',')]
+  const lines = [keys.map(escapeCsvValue).join(',')]
   for (const r of records) lines.push(keys.map((k) => escapeCsvValue(r[k])).join(','))
   return lines.join('\n')
 }

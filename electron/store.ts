@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join, dirname } from 'node:path'
 import type { SavedOrg, SavedOrgView, SaveOrgInput } from '../src/shared/types'
@@ -72,7 +72,11 @@ function migrate(data: LegacyPersisted): Persisted {
 function save(data: Persisted): void {
   const p = file()
   mkdirSync(dirname(p), { recursive: true })
-  writeFileSync(p, JSON.stringify(data, null, 2), { mode: 0o600 })
+  // Write to a temp file then rename - an atomic swap so a crash mid-write
+  // can't corrupt the credential store (leaves the previous file intact).
+  const tmp = `${p}.tmp`
+  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
+  renameSync(tmp, p)
 }
 
 function encrypt(plain: string): string {
