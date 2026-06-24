@@ -167,10 +167,83 @@
   max-width: 1024px;
   margin: 0 auto;
 }
+/* Extract: fill viewport, scroll only inside the result preview. */
+.panel.extract {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.panel.extract .card.results {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.panel.extract .card.results .csv-preview {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
+}
+/* Wizard stepper */
+.wizard-steps {
+  display: flex;
+  gap: 10px;
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+}
+.wizard-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.wizard-steps li.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.wizard-steps li.done {
+  color: var(--text);
+}
+.wizard-steps li.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.wizard-steps .step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--input);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+.wizard-steps li.active .step-no {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.actions.split {
+  display: flex;
+  justify-content: space-between;
 }
 .card {
   background: var(--panel);
@@ -296,6 +369,55 @@ textarea:focus {
   resize: vertical;
   font-family: var(--mono);
   font-size: 13px;
+}
+.soql-wrap {
+  position: relative;
+  width: 100%;
+}
+.soql-suggest {
+  position: absolute;
+  z-index: 30;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 240px;
+  max-width: 420px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.soql-suggest li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.soql-suggest li.active {
+  background: var(--input);
+}
+.soql-kind {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  color: var(--bg);
+}
+.soql-kind.k-object {
+  background: #7aa2f7;
+}
+.soql-kind.k-field {
+  background: #9ece6a;
+}
+.soql-kind.k-keyword {
+  background: #bb9af7;
 }
 
 /* Buttons */

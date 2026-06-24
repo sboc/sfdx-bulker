@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, unwrap } from '../api'
 import { combineCsvs, parseCsvPreview, remapCsv } from '../shared/csv'
+import { bestMatch, fuzzyThreshold } from '../shared/fuzzy'
 import type { BulkOperation, JobInfo, LineEnding, SObjectField, SObjectInfo } from '../shared/types'
 
 const OPERATIONS: { id: BulkOperation; label: string; desc: string }[] = [
@@ -50,6 +51,7 @@ export function LoadPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [job, setJob] = useState<JobInfo | null>(null)
+  const [step, setStep] = useState(1)
 
   const preview = useMemo(() => parseCsvPreview(file?.content), [file])
   const mapReady = fields.length > 0 && fieldsObject === object && !!preview
@@ -189,8 +191,23 @@ export function LoadPanel({
     }
   }
 
+  const canAdvance = !!file && !!object.trim() && !(operation === 'upsert' && !externalId.trim())
+  const stepTitle = destructive ? 'Record Id' : 'Field mapping'
+
   return (
     <div className="panel">
+      <ol className="wizard-steps">
+        <li className={step === 1 ? 'active' : 'done'} onClick={() => setStep(1)}>
+          <span className="step-no">1</span> Configure
+        </li>
+        <li className={step === 2 ? 'active' : canAdvance ? '' : 'disabled'}
+          onClick={() => canAdvance && setStep(2)}>
+          <span className="step-no">2</span> {stepTitle} &amp; run
+        </li>
+      </ol>
+
+      {step === 1 && (
+      <>
       <div className="grid">
         <div className="card">
           <h3>1. Operation</h3>
@@ -278,9 +295,21 @@ export function LoadPanel({
         </div>
       </div>
 
+      {error && !mismatched && <div className="banner error">{error}</div>}
+
+      <div className="actions">
+        <button className="btn primary" onClick={() => setStep(2)} disabled={!canAdvance}>
+          Next: {stepTitle} →
+        </button>
+      </div>
+      </>
+      )}
+
+      {step === 2 && (
+      <>
       {preview && (
         <div className="card">
-          <h3>4. {destructive ? 'Record Id' : 'Field mapping'}</h3>
+          <h3>{destructive ? 'Record Id' : 'Field mapping'}</h3>
           {destructive ? (
             <>
               <p className="hint">
@@ -366,7 +395,10 @@ export function LoadPanel({
         </div>
       )}
 
-      <div className="actions">
+      <div className="actions split">
+        <button className="btn ghost" onClick={() => setStep(1)} disabled={busy}>
+          ← Back
+        </button>
         <button
           className={destructive ? 'btn danger' : 'btn primary'}
           onClick={submit}
@@ -380,6 +412,8 @@ export function LoadPanel({
           {busy ? 'Submitting…' : `Run ${operation}`}
         </button>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -402,12 +436,14 @@ function ObjectSelect({
 
   const q = value.trim().toLowerCase()
   const matches = useMemo(() => {
-    const list = q
-      ? objects.filter(
-          (o) => o.name.toLowerCase().includes(q) || o.label.toLowerCase().includes(q),
-        )
-      : objects
-    return list.slice(0, 200)
+    if (!q) return objects.slice(0, 200)
+    const limit = fuzzyThreshold(q.length)
+    return objects
+      .map((o) => ({ o, score: bestMatch(q, o.name.toLowerCase(), o.label.toLowerCase()) }))
+      .filter((s) => s.score < 1000 || s.score - 1000 <= limit)
+      .sort((a, b) => a.score - b.score || a.o.name.localeCompare(b.o.name))
+      .slice(0, 200)
+      .map((s) => s.o)
   }, [objects, q])
 
   useEffect(() => {
