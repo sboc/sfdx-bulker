@@ -5,7 +5,7 @@ Desktop app (Electron + React) for running **Salesforce Bulk API 2.0** jobs agai
 | Tab | What it does |
 |-----|--------------|
 | **Load** | `insert` · `update` · `upsert` · `delete` · `hardDelete` from a CSV file |
-| **Extract** | Run a SOQL query as a bulk query job, preview and save results to CSV |
+| **Extract** | Write a SOQL query (with object/field autocomplete) and run it as a bulk query job, preview and save results to CSV |
 | **Monitor** | Track jobs submitted this session, poll each for live progress, view/save successful · failed · unprocessed records, abort, and fix & resubmit failed records |
 
 The Salesforce browser SDK can't call the Bulk API directly (CORS), so all API
@@ -63,13 +63,22 @@ npm test           # run the Vitest suite once
 npm run test:watch # watch mode
 ```
 
-Vitest covers the pure logic (CSV build/parse, org-URL handling, CLI org-list
-parsing, job-info mapping, encrypted store, PATH recovery) in a node
+Vitest covers the pure logic (CSV build/parse, fuzzy matching, org-URL handling,
+CLI org-list parsing, job-info mapping, encrypted store, PATH recovery) in a node
 environment, plus jsdom + Testing Library component tests for `ConnectBar`,
 `LoadPanel`, `ExtractPanel`, and `MonitorPanel`.
 
 ## Operations notes
 
+- **Load wizard**: Load is a two-step flow - **Configure** (operation, target
+  sObject, CSV file) then **Field mapping & run**. Step 2 unlocks once an object
+  and file (and external Id, for upsert) are set.
+- **Searchable pickers**: the sObject selector and every field dropdown
+  (external Id, Id column, mapping targets) are fuzzy-searchable - type to filter
+  with typo tolerance (Levenshtein), ranked exact → prefix → substring → fuzzy.
+- **SOQL autocomplete**: the Extract editor suggests sObjects after `FROM`,
+  fields of the queried object elsewhere, plus SOQL keywords. `Ctrl/Cmd+Space`
+  triggers it, `Ctrl/Cmd+Enter` runs the query.
 - **Field mapping**: after picking the object + CSV, the Load tab fetches the
   object's fields and auto-maps each CSV column (by API name or label). Adjust
   any mapping or set a column to *ignore*; the CSV is rewritten to field API
@@ -96,7 +105,10 @@ environment, plus jsdom + Testing Library component tests for `ConnectBar`,
 ```
 src/                React renderer (UI only, talks via window.api IPC bridge)
   components/        Load / Extract / Monitor panels + ConnectBar
+                     SoqlEditor (autocomplete) + Combo (fuzzy picker)
   shared/types.ts    IPC contract shared with main process
+  shared/csv.ts      CSV parse / combine / remap helpers
+  shared/fuzzy.ts    Levenshtein fuzzy match + ranking
 electron/
   main.ts            BrowserWindow + IPC handlers + file dialogs
   preload.ts         contextBridge exposing the typed API
