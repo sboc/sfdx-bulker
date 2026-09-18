@@ -1,4 +1,5 @@
 export interface JobFilters {
+  id: string
   object: string
   state: string
   operation: string
@@ -6,4 +7,11 @@ export interface JobFilters {
   to: string
 }
 
-export const EMPTY_JOB_FILTERS: JobFilters = { object: '', state: '', operation: '', from: '', to: '' }
+export const EMPTY_JOB_FILTERS: JobFilters = {
+  id: '',
+  object: '',
+  state: '',
+  operation: '',
+  from: '',
+  to: '',
+}

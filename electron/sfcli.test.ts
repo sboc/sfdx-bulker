@@ -20,13 +20,28 @@ vi.mock('node:child_process', () => {
         }),
       })
     }
-    if (a.startsWith('org display')) {
-      if (args.includes('notoken@x')) {
-        return Promise.resolve({ stdout: JSON.stringify({ result: { username: 'notoken@x' } }) })
-      }
+    if (a.startsWith('org auth show-access-token')) {
       const user = args[args.indexOf('--target-org') + 1]
+      if (user === 'notoken@x') return Promise.resolve({ stdout: '{}' })
+      if (user === 'legacy@x') {
+        // Legacy CLI: this command doesn't exist.
+        return Promise.reject(Object.assign(new Error('command not found'), { stdout: undefined }))
+      }
+      return Promise.resolve({ stdout: JSON.stringify({ result: { accessToken: 'TOK' } }) })
+    }
+    if (a.startsWith('org display')) {
+      const user = args[args.indexOf('--target-org') + 1]
+      if (user === 'notoken@x') {
+        return Promise.resolve({ stdout: JSON.stringify({ result: { instanceUrl: 'https://i', username: 'notoken@x' } }) })
+      }
+      if (user === 'legacy@x' && args.includes('--verbose')) {
+        // Legacy CLI without `org auth show-access-token`: verbose display has the real token.
+        return Promise.resolve({
+          stdout: JSON.stringify({ result: { accessToken: 'LEGACY_TOK', instanceUrl: 'https://i', username: user } }),
+        })
+      }
       return Promise.resolve({
-        stdout: JSON.stringify({ result: { accessToken: 'TOK', instanceUrl: 'https://i', username: user } }),
+        stdout: JSON.stringify({ result: { instanceUrl: 'https://i', username: user } }),
       })
     }
     if (a.startsWith('org login web')) {
@@ -88,6 +103,10 @@ describe('getCliOrgAuth', () => {
 
   it('throws when the CLI returns no access token', async () => {
     await expect(getCliOrgAuth('notoken@x')).rejects.toThrow(/no access token/i)
+  })
+
+  it('falls back to verbose display when `org auth show-access-token` is unsupported', async () => {
+    expect(await getCliOrgAuth('legacy@x')).toEqual({ accessToken: 'LEGACY_TOK', instanceUrl: 'https://i' })
   })
 })
 

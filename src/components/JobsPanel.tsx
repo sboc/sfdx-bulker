@@ -54,7 +54,7 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
   }, [loaded, refresh])
 
   const list = useMemo(() => jobs ?? [], [jobs])
-  const { object, state, operation, from, to } = filters
+  const { id, object, state, operation, from, to } = filters
   const set = (patch: Partial<JobFilters>) => {
     setPage(1)
     onFilters({ ...filters, ...patch })
@@ -79,7 +79,9 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
   )
 
   const filtered = useMemo(() => {
+    const needle = id.trim().toLowerCase()
     return list.filter((j) => {
+      if (needle && !j.id.toLowerCase().includes(needle)) return false
       if (object && j.object !== object) return false
       if (state && j.state !== state) return false
       if (operation && opOf(j) !== operation) return false
@@ -89,9 +91,9 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
       if (to && day > to) return false
       return true
     })
-  }, [list, object, state, operation, from, to])
+  }, [list, id, object, state, operation, from, to])
 
-  const active = !!(object || state || operation || from || to)
+  const active = !!(id || object || state || operation || from || to)
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   // Clamp during render so a shrunk result set or page size can't strand the
@@ -111,6 +113,13 @@ export function JobsPanel({ jobs, onJobs, filters, onFilters, onTrack, onViewMon
         <button className="btn ghost" onClick={refresh} disabled={loading}>
           {loading ? 'Loading…' : '↻ Refresh'}
         </button>
+        <input
+          className="filter job-filter-id"
+          aria-label="Search by job id"
+          placeholder="Search job id…"
+          value={id}
+          onChange={(e) => set({ id: e.target.value })}
+        />
         <Combo
           className="job-filter-object"
           options={objectOptions}

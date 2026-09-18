@@ -141,16 +141,40 @@ export async function logoutCliOrg(username: string): Promise<void> {
 export async function getCliOrgAuth(
   username: string,
 ): Promise<{ accessToken: string; instanceUrl: string }> {
-  const r = await runCli<CliOrgDisplay>([
-    'org',
-    'display',
-    '--target-org',
-    username,
-    '--verbose',
-    '--json',
-  ])
-  if (!r.accessToken || !r.instanceUrl) {
+  const display = await runCli<CliOrgDisplay>(['org', 'display', '--target-org', username, '--json'])
+  if (!display.instanceUrl) {
+    throw new Error(`Salesforce CLI returned no instance URL for ${username}. Re-authenticate it.`)
+  }
+  // Newer CLI versions redact the access token from `org display` output; the
+  // dedicated `org auth show-access-token` command is the supported way to get it.
+  let accessToken: string | undefined
+  try {
+    accessToken = (
+      await runCli<{ accessToken?: string } | undefined>([
+        'org',
+        'auth',
+        'show-access-token',
+        '--target-org',
+        username,
+        '--no-prompt',
+        '--json',
+      ])
+    )?.accessToken
+  } catch (e) {
+    // Legacy CLI without this command - fall back to the (unredacted) verbose display.
+    const verbose = await runCli<CliOrgDisplay>([
+      'org',
+      'display',
+      '--target-org',
+      username,
+      '--verbose',
+      '--json',
+    ])
+    accessToken = verbose.accessToken?.startsWith('[REDACTED') ? undefined : verbose.accessToken
+    if (!accessToken) throw e
+  }
+  if (!accessToken) {
     throw new Error(`Salesforce CLI returned no access token for ${username}. Re-authenticate it.`)
   }
-  return { accessToken: r.accessToken, instanceUrl: r.instanceUrl }
+  return { accessToken, instanceUrl: display.instanceUrl }
 }

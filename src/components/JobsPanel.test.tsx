@@ -93,6 +93,13 @@ describe('JobsPanel', () => {
     expect(await screen.findByText(/boom \(500\)/)).toBeTruthy()
   })
 
+  it('filters by id substring, case-insensitively', async () => {
+    render(<Harness initialJobs={JOBS} initialFilters={{ ...EMPTY_JOB_FILTERS, id: 'I2' }} />)
+    expect(screen.getByText('i2')).toBeTruthy()
+    expect(screen.queryByText('i1')).toBeNull()
+    expect(screen.queryByText('q1')).toBeNull()
+  })
+
   it('filters by object', async () => {
     render(<Harness initialJobs={JOBS} initialFilters={{ ...EMPTY_JOB_FILTERS, object: 'Contact' }} />)
     expect(screen.getByText('i2')).toBeTruthy()

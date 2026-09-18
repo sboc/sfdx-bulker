@@ -696,8 +696,10 @@ textarea:focus {
 /* Toolbar / toggle */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+  row-gap: 8px;
   margin-bottom: 14px;
 }
 .toggle {
@@ -730,7 +732,11 @@ textarea:focus {
   max-width: 200px;
 }
 
-/* Jobs tab filters - kept compact so the row fits on one line */
+/* Jobs tab filters - kept compact; toolbar wraps if the row still overflows */
+.job-filter-id {
+  width: 130px;
+  flex: 0 0 auto;
+}
 .job-filter-object {
   width: 150px;
   flex: 0 0 auto;
